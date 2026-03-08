@@ -1,0 +1,38 @@
+{
+  "name": "@reactcanvas/plugins",
+  "version": "1.0.0",
+  "description": "Plugin type definitions, registry, and development utilities for ReactCanvas Studio",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@reactcanvas/core": "workspace:*",
+    "@reactcanvas/shapes": "workspace:*",
+    "@reactcanvas/images": "workspace:*",
+    "@reactcanvas/text": "workspace:*",
+    "@reactcanvas/pages": "workspace:*",
+    "@reactcanvas/export": "workspace:*",
+    "@reactcanvas/history": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0"
+  },
+  "license": "MIT"
+}

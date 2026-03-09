@@ -8,7 +8,6 @@ import {
   useHistory,
 } from '@reactcanvas/react';
 import { DOMElementRenderer } from '../renderers/DOMElementRenderer';
-import { TextToolbar } from '../ui/TextToolbar';
 import { copyElements, pasteElements, flipElements, getClipboard } from './useClipboard';
 import { computeSmartGuides, type Guide } from './smartGuides';
 import { processImageFile } from '../utils/imageUpload';
@@ -19,6 +18,8 @@ export interface EditorCanvasProps {
   height?: number;
   className?: string;
   canvasRef?: React.RefObject<HTMLDivElement>;
+  handTool?: boolean;
+  onEditingTextChange?: (isEditing: boolean) => void;
 }
 
 type DragState = {
@@ -53,12 +54,18 @@ type DragState = {
   startClientY: number;
   currentClientX: number;
   currentClientY: number;
+} | {
+  type: 'pan';
+  startClientX: number;
+  startClientY: number;
+  origPanX: number;
+  origPanY: number;
 };
 
 const NUDGE_AMOUNT = 1;
 const NUDGE_SHIFT_AMOUNT = 10;
 
-export function EditorCanvas({ width = 1200, height = 800, className, canvasRef: externalCanvasRef }: EditorCanvasProps) {
+export function EditorCanvas({ width = 1200, height = 800, className, canvasRef: externalCanvasRef, handTool: handToolProp = false, onEditingTextChange }: EditorCanvasProps) {
   const internalCanvasRef = useRef<HTMLDivElement>(null);
   const canvasRef = externalCanvasRef ?? internalCanvasRef;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -69,9 +76,15 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
   const { undo, redo } = useHistory();
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const hasInitialFit = useRef(false);
+
+  // Notify parent when text editing state changes
+  useEffect(() => {
+    onEditingTextChange?.(!!editingTextId);
+  }, [editingTextId, onEditingTextChange]);
   const [dragging, setDragging] = useState<DragState | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [guides, setGuides] = useState<Array<{ type: 'h' | 'v'; pos: number }>>([]);
+  const [spaceHeld, setSpaceHeld] = useState(false);
 
   const pageWidth = activePage?.width ?? 1920;
   const pageHeight = activePage?.height ?? 1080;
@@ -90,14 +103,6 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
 
   const offsetX = (width - pageWidth * zoom) / 2 + panX;
   const offsetY = (height - pageHeight * zoom) / 2 + panY;
-
-  // Find selected text element for floating toolbar (always live from store)
-  const selectedTextElement = useMemo(() => {
-    const targetId = editingTextId ?? (selectedElementIds.length === 1 ? selectedElementIds[0] : null);
-    if (!targetId) return null;
-    const el = elements.find((e) => e.id === targetId);
-    return el?.type === 'text' ? (el as TextElement) : null;
-  }, [editingTextId, selectedElementIds, elements]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -221,6 +226,29 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedElementIds, elements, editingTextId, removeElements, duplicateElements, selectAll, deselectAll, updateElement, undo, redo, addElement, selectMultiple, bringToFront, sendToBack, bringForward, sendBackward, groupElements, ungroupElement]);
 
+  // Track Space key for temporary hand/pan mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !editingTextId) {
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        e.preventDefault();
+        setSpaceHeld(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') setSpaceHeld(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [editingTextId]);
+
+  const isPanMode = spaceHeld || handToolProp;
+
   // Wheel zoom/pan
   const wheelRef = useRef<{ zoom: number; panX: number; panY: number }>({ zoom, panX, panY });
   wheelRef.current = { zoom, panX, panY };
@@ -255,36 +283,63 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
     return () => container.removeEventListener('wheel', handleWheel);
   }, [setZoom, setPan]);
 
-  // Click on page background → start rubber band or deselect
-  const handlePageClick = useCallback(
+  // Start pan drag (Space+click, middle mouse, or hand tool)
+  const startPanDrag = useCallback(
     (e: React.MouseEvent) => {
-      if (e.target === e.currentTarget) {
-        e.preventDefault();
-        setEditingTextId(null);
-        deselectAll();
-        // Start rubber band selection
-        setDragging({
-          type: 'rubberband',
-          startClientX: e.clientX,
-          startClientY: e.clientY,
-          currentClientX: e.clientX,
-          currentClientY: e.clientY,
-        });
-      }
+      e.preventDefault();
+      setDragging({
+        type: 'pan',
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        origPanX: panX,
+        origPanY: panY,
+      });
     },
-    [deselectAll]
+    [panX, panY]
   );
 
-  // Click on viewport background (gray area) → deselect and exit editing
+  // Click on page background → start rubber band or deselect (or pan)
+  const handlePageClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.target !== e.currentTarget) return;
+      e.preventDefault();
+
+      // Middle mouse button or pan mode → start panning
+      if (e.button === 1 || isPanMode) {
+        startPanDrag(e);
+        return;
+      }
+
+      setEditingTextId(null);
+      deselectAll();
+      // Start rubber band selection
+      setDragging({
+        type: 'rubberband',
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        currentClientX: e.clientX,
+        currentClientY: e.clientY,
+      });
+    },
+    [deselectAll, isPanMode, startPanDrag]
+  );
+
+  // Click on viewport background (gray area) → deselect, exit editing, or pan
   const handleViewportClick = useCallback(
     (e: React.MouseEvent) => {
-      if (e.target === e.currentTarget) {
-        e.preventDefault();
-        setEditingTextId(null);
-        deselectAll();
+      if (e.target !== e.currentTarget) return;
+      e.preventDefault();
+
+      // Middle mouse button or pan mode → start panning
+      if (e.button === 1 || isPanMode) {
+        startPanDrag(e);
+        return;
       }
+
+      setEditingTextId(null);
+      deselectAll();
     },
-    [deselectAll]
+    [deselectAll, isPanMode, startPanDrag]
   );
 
   // Select element (with shift for multi-select)
@@ -302,6 +357,12 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
   // Start dragging an element (moves all selected elements together)
   const handleDragStart = useCallback(
     (id: string, e: React.MouseEvent) => {
+      // In pan mode or middle mouse, start panning instead of moving elements
+      if (e.button === 1 || isPanMode) {
+        startPanDrag(e);
+        return;
+      }
+
       const el = elements.find((el) => el.id === id);
       if (!el || el.locked) return;
       e.stopPropagation();
@@ -323,7 +384,7 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
         origPositions,
       });
     },
-    [elements, selectedElementIds]
+    [elements, selectedElementIds, isPanMode, startPanDrag]
   );
 
   // Start resizing an element (or multiple selected elements)
@@ -488,7 +549,7 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
           }
         } else {
           // Single element resize
-          const attrs: Record<string, any> = { x: newX, y: newY, width: newW, height: newH };
+          const attrs: Record<string, number> = { x: newX, y: newY, width: newW, height: newH };
 
           // Text elements: only scale font when dragging vertical-only handles (tc, bc)
           if (dragging.element.type === 'text') {
@@ -499,7 +560,7 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
             }
           }
 
-          updateElement(dragging.id, attrs as Partial<CanvasElement>);
+          updateElement(dragging.id, attrs as unknown as Partial<CanvasElement>);
         }
       } else if (dragging.type === 'rotate') {
         const currentAngle = Math.atan2(
@@ -516,6 +577,10 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
         while (newRotation < -180) newRotation += 360;
 
         updateElement(dragging.id, { rotation: newRotation } as Partial<CanvasElement>);
+      } else if (dragging.type === 'pan') {
+        const dx = e.clientX - dragging.startClientX;
+        const dy = e.clientY - dragging.startClientY;
+        setPan(dragging.origPanX + dx, dragging.origPanY + dy);
       } else if (dragging.type === 'rubberband') {
         setDragging({
           ...dragging,
@@ -558,7 +623,7 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragging, zoom, updateElement, offsetX, offsetY, sortedElements, selectMultiple]);
+  }, [dragging, zoom, updateElement, offsetX, offsetY, sortedElements, selectMultiple, setPan]);
 
   // Double-click text to edit in-place
   const handleDblClick = useCallback(
@@ -656,7 +721,7 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
         height,
         overflow: 'hidden',
         backgroundColor: '#0f0f14',
-        cursor: dragging?.type === 'move' ? 'grabbing' : dragging?.type === 'rotate' ? 'grabbing' : dragging?.type === 'rubberband' ? 'crosshair' : 'default',
+        cursor: dragging?.type === 'pan' ? 'grabbing' : isPanMode ? 'grab' : dragging?.type === 'move' ? 'grabbing' : dragging?.type === 'rotate' ? 'grabbing' : dragging?.type === 'rubberband' ? 'crosshair' : 'default',
         outline: 'none',
       }}
       className={className}
@@ -711,24 +776,7 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
         </div>
       </div>
 
-      {/* Floating text toolbar when a text element is selected or being edited */}
-      {selectedTextElement && (
-        <TextToolbar
-          element={selectedTextElement}
-          isEditing={!!editingTextId}
-          onUpdate={(id, attrs) => updateElement(id, attrs)}
-          style={{
-            position: 'absolute',
-            left: Math.max(8, Math.min(
-              offsetX + selectedTextElement.x * zoom,
-              width - 500
-            )),
-            top: Math.max(8,
-              offsetY + selectedTextElement.y * zoom - 52
-            ),
-          }}
-        />
-      )}
+      {/* Text toolbar is now rendered in DesignEditor as a top bar */}
 
       {/* Rubber band selection rectangle */}
       {rubberBand && rubberBand.width > 2 && rubberBand.height > 2 && (

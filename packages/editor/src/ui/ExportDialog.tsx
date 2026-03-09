@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
+import type { Document } from '@reactcanvas/core';
 import { useEditor } from '@reactcanvas/react';
 import { exportToJson, downloadString, downloadBlob } from '@reactcanvas/export';
 import html2canvas from 'html2canvas';
@@ -9,15 +10,50 @@ export interface ExportDialogProps {
   canvasRef: React.RefObject<HTMLDivElement>;
   /** External image upload handler — receives a Blob, returns a URL string */
   onImageUpload?: (blob: Blob, filename: string) => Promise<string>;
+  /** Callback when a JSON document is imported */
+  onImport?: (document: Document) => void;
 }
 
-export function ExportDialog({ isOpen, onClose, canvasRef, onImageUpload }: ExportDialogProps) {
+export function ExportDialog({ isOpen, onClose, canvasRef, onImageUpload, onImport }: ExportDialogProps) {
   const { document } = useEditor();
   const [format, setFormat] = useState('png');
   const [quality, setQuality] = useState(0.92);
   const [dpi, setDpi] = useState(72);
   const [isExporting, setIsExporting] = useState(false);
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportClick = useCallback(() => {
+    setImportError(null);
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(reader.result as string) as Document;
+          if (!parsed.pages || !Array.isArray(parsed.pages)) {
+            setImportError('Invalid document: missing pages array');
+            return;
+          }
+          setImportError(null);
+          onImport?.(parsed);
+          onClose();
+        } catch (err) {
+          setImportError('Failed to parse JSON file');
+        }
+      };
+      reader.readAsText(file);
+      // Reset input so re-selecting same file triggers change
+      e.target.value = '';
+    },
+    [onImport, onClose]
+  );
 
   const handleExport = useCallback(async () => {
     setIsExporting(true);
@@ -59,9 +95,9 @@ export function ExportDialog({ isOpen, onClose, canvasRef, onImageUpload }: Expo
 
       // PNG or JPG
       const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
-      const blob = await new Promise<Blob>((resolve) => {
+      const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(
-          (b: Blob | null) => resolve(b!),
+          (b: Blob | null) => (b ? resolve(b) : reject(new Error('Failed to create image blob'))),
           mimeType,
           format === 'jpg' ? quality : undefined
         );
@@ -144,6 +180,26 @@ export function ExportDialog({ isOpen, onClose, canvasRef, onImageUpload }: Expo
               <span style={styles.qualityValue}>{Math.round(quality * 100)}%</span>
             </div>
           )}
+
+          {/* Import JSON */}
+          <div style={styles.field}>
+            <label style={styles.label}>Import</label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              style={{ display: 'none' }}
+              onChange={handleFileChange}
+            />
+            <button style={styles.importButton} onClick={handleImportClick}>
+              Import JSON
+            </button>
+            {importError && (
+              <span style={{ color: '#f38ba8', fontSize: 12, marginTop: 4, display: 'block' }}>
+                {importError}
+              </span>
+            )}
+          </div>
 
           {onImageUpload && (format === 'png' || format === 'jpg') && (
             <div style={styles.infoBox}>
@@ -302,5 +358,16 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     fontWeight: 600,
     cursor: 'pointer',
+  },
+  importButton: {
+    width: '100%',
+    height: 36,
+    border: '1px dashed #45475a',
+    borderRadius: 6,
+    backgroundColor: 'transparent',
+    color: '#a6adc8',
+    fontSize: 13,
+    cursor: 'pointer',
+    transition: 'border-color 0.15s, color 0.15s',
   },
 };

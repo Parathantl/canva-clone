@@ -12,33 +12,45 @@ import {
 } from '@reactcanvas/core';
 import { processImageFile } from '../utils/imageUpload';
 
-export function Toolbar({ onExport, onPresent, onShortcuts }: { onExport?: () => void; onPresent?: () => void; onShortcuts?: () => void }) {
+export function Toolbar({ onExport, onPresent, onShortcuts, handTool, onHandToolToggle, canvasWidth, canvasHeight }: {
+  onExport?: () => void;
+  onPresent?: () => void;
+  onShortcuts?: () => void;
+  handTool?: boolean;
+  onHandToolToggle?: () => void;
+  canvasWidth?: number;
+  canvasHeight?: number;
+}) {
   const { selectedElementIds } = useSelection();
   const { addElement, removeElements, duplicateElements, elements } = useElements();
-  const { zoomIn, zoomOut, zoomPercent, zoomToFit } = useViewport();
+  const { zoomIn, zoomOut, zoomPercent, zoomToFit, zoomToPercent } = useViewport();
   const { undo, redo } = useHistory();
-  const { addPage, activePage } = usePages();
+  const { activePage } = usePages();
+
+  const pageWidth = activePage?.width ?? 1920;
+  const pageHeight = activePage?.height ?? 1080;
+  const pageCenter = { x: pageWidth / 2, y: pageHeight / 2 };
+
+  const handleZoomToFit = useCallback(() => {
+    zoomToFit(canvasWidth ?? 1200, canvasHeight ?? 800, pageWidth, pageHeight);
+  }, [zoomToFit, canvasWidth, canvasHeight, pageWidth, pageHeight]);
 
   const handleAddShape = useCallback(
     (shapeType: string) => {
-      const cx = (activePage?.width ?? 1920) / 2;
-      const cy = (activePage?.height ?? 1080) / 2;
       addElement(createShapeElement({
         shapeType,
-        x: cx - 100,
-        y: cy - 100,
+        x: pageCenter.x - 100,
+        y: pageCenter.y - 100,
         layerOrder: elements.length,
         name: shapeType.charAt(0).toUpperCase() + shapeType.slice(1),
       }));
     },
-    [addElement, elements.length, activePage]
+    [addElement, elements.length, pageCenter.x, pageCenter.y]
   );
 
   const handleAddText = useCallback(() => {
-    const cx = (activePage?.width ?? 1920) / 2;
-    const cy = (activePage?.height ?? 1080) / 2;
-    addElement(createTextElement({ x: cx - 150, y: cy - 30, layerOrder: elements.length }));
-  }, [addElement, elements.length, activePage]);
+    addElement(createTextElement({ x: pageCenter.x - 150, y: pageCenter.y - 30, layerOrder: elements.length }));
+  }, [addElement, elements.length, pageCenter.x, pageCenter.y]);
 
   return (
     <div style={styles.toolbar}>
@@ -58,7 +70,6 @@ export function Toolbar({ onExport, onPresent, onShortcuts }: { onExport?: () =>
         <div style={styles.toolGroup}>
           <ToolBtn icon="T" tip="Add Text" onClick={handleAddText} />
           <ImageUploadButton />
-          <ToolBtn icon={'\u2795'} tip="Add Page" onClick={() => addPage()} />
         </div>
       </div>
 
@@ -89,11 +100,30 @@ export function Toolbar({ onExport, onPresent, onShortcuts }: { onExport?: () =>
 
       {/* Right: Zoom + Export */}
       <div style={styles.section}>
+        {onHandToolToggle && (
+          <>
+            <ToolBtn icon={'\u270B'} tip="Hand Tool (hold Space)" onClick={onHandToolToggle} active={handTool} />
+            <div style={styles.divider} />
+          </>
+        )}
         <div style={styles.zoomGroup}>
           <ToolBtn icon={'\u2212'} tip="Zoom Out" onClick={zoomOut} small />
-          <span style={styles.zoomLabel}>{zoomPercent}%</span>
+          <select
+            value={zoomPercent}
+            onChange={(e) => zoomToPercent(Number(e.target.value))}
+            style={styles.zoomSelect}
+          >
+            {(() => {
+              const presets = [25, 50, 75, 100, 125, 150, 200, 300];
+              const options = presets.includes(zoomPercent)
+                ? presets
+                : [...presets, zoomPercent].sort((a, b) => a - b);
+              return options.map((p) => (
+                <option key={p} value={p}>{p}%</option>
+              ));
+            })()}</select>
           <ToolBtn icon={'\u002B'} tip="Zoom In" onClick={zoomIn} small />
-          <ToolBtn icon={'\u2B1C'} tip="Fit to Screen" onClick={zoomToFit} small />
+          <ToolBtn icon={'\u2B1C'} tip="Fit to Screen" onClick={handleZoomToFit} small />
         </div>
 
         {onShortcuts && (
@@ -128,20 +158,20 @@ function ImageUploadButton() {
   const { addElement, elements } = useElements();
   const { activePage } = usePages();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const cx = (activePage?.width ?? 1920) / 2;
+  const cy = (activePage?.height ?? 1080) / 2;
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      const cx = (activePage?.width ?? 1920) / 2;
-      const cy = (activePage?.height ?? 1080) / 2;
       processImageFile(
         { file, x: cx, y: cy, layerOrder: elements.length },
         (el) => addElement(el),
       );
       if (fileInputRef.current) fileInputRef.current.value = '';
     },
-    [addElement, elements.length, activePage]
+    [addElement, elements.length, cx, cy]
   );
 
   return (
@@ -273,13 +303,21 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 10,
     padding: '2px 3px',
   },
-  zoomLabel: {
+  zoomSelect: {
     color: '#8888a8',
     fontSize: 11,
-    minWidth: 36,
+    minWidth: 52,
     textAlign: 'center' as const,
     fontFamily: 'JetBrains Mono, monospace',
     fontWeight: 500,
+    backgroundColor: 'transparent',
+    border: 'none',
+    outline: 'none',
+    cursor: 'pointer',
+    appearance: 'none' as const,
+    WebkitAppearance: 'none' as const,
+    padding: '2px 4px',
+    borderRadius: 4,
   },
   presentButton: {
     height: 34,

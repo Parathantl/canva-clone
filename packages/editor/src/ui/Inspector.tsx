@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { useSelection, useElements, usePages } from '@reactcanvas/react';
-import type { CanvasElement, ShapeElement, ChartElement, KPIElement, TableElement, ProgressElement, EmbedElement } from '@reactcanvas/core';
+import type { CanvasElement, ShapeElement, ChartElement, KPIElement, TableElement, ProgressElement, EmbedElement, ImageElement } from '@reactcanvas/core';
+import { FILTER_PRESETS, applyFilterPreset } from '@reactcanvas/images';
 import { ColorPicker } from './ColorPicker';
 
 export function Inspector() {
@@ -147,6 +148,7 @@ const INSPECTOR_REGISTRY: Record<string, React.FC<{ element: any }>> = {
   table: ({ element }) => <TableInspector element={element as TableElement} />,
   progress: ({ element }) => <ProgressInspector element={element as ProgressElement} />,
   embed: ({ element }) => <EmbedInspector element={element as EmbedElement} />,
+  image: ({ element }) => <ImageInspector element={element as ImageElement} />,
 };
 
 function TypeSpecificInspector({ element }: { element: CanvasElement }) {
@@ -580,6 +582,142 @@ function EmbedInspector({ element }: { element: EmbedElement }) {
             onChange={(e) => updateElement(element.id, { showBorder: e.target.checked } as Partial<CanvasElement>)}
           />
         </PropertyRow>
+      </PropertyGroup>
+    </>
+  );
+}
+
+const DEFAULT_FILTERS = {
+  brightness: 0,
+  contrast: 0,
+  saturation: 0,
+  hueRotation: 0,
+  blur: 0,
+  preset: '',
+} as const;
+
+function ImageInspector({ element }: { element: ImageElement }) {
+  const { updateElement } = useElements();
+
+  const filters = element.filters ?? DEFAULT_FILTERS;
+
+  const updateFilter = useCallback(
+    (key: string, value: number) => {
+      const current = element.filters ?? DEFAULT_FILTERS;
+      updateElement(element.id, {
+        filters: { ...current, [key]: value, preset: '' },
+      } as Partial<CanvasElement>);
+    },
+    [element.id, element.filters, updateElement],
+  );
+
+  const handlePresetChange = useCallback(
+    (presetName: string) => {
+      updateElement(element.id, {
+        filters: applyFilterPreset(presetName),
+      } as Partial<CanvasElement>);
+    },
+    [element.id, updateElement],
+  );
+
+  const handleReset = useCallback(() => {
+    updateElement(element.id, {
+      filters: { ...DEFAULT_FILTERS },
+    } as Partial<CanvasElement>);
+  }, [element.id, updateElement]);
+
+  return (
+    <>
+      <PropertyGroup label="Filters">
+        <PropertyRow label="Preset">
+          <select
+            value={filters.preset ?? ''}
+            onChange={(e) => handlePresetChange(e.target.value)}
+            style={styles.select}
+          >
+            {FILTER_PRESETS.map((p) => (
+              <option key={p.name} value={p.name}>
+                {p.displayName}
+              </option>
+            ))}
+          </select>
+        </PropertyRow>
+        <PropertyRow label="Brightness">
+          <input
+            type="range"
+            min={-100}
+            max={100}
+            step={1}
+            value={filters.brightness}
+            onChange={(e) => updateFilter('brightness', parseFloat(e.target.value))}
+            style={styles.slider}
+          />
+          <span style={styles.sliderValue}>{filters.brightness}</span>
+        </PropertyRow>
+        <PropertyRow label="Contrast">
+          <input
+            type="range"
+            min={-100}
+            max={100}
+            step={1}
+            value={filters.contrast}
+            onChange={(e) => updateFilter('contrast', parseFloat(e.target.value))}
+            style={styles.slider}
+          />
+          <span style={styles.sliderValue}>{filters.contrast}</span>
+        </PropertyRow>
+        <PropertyRow label="Saturation">
+          <input
+            type="range"
+            min={-100}
+            max={100}
+            step={1}
+            value={filters.saturation}
+            onChange={(e) => updateFilter('saturation', parseFloat(e.target.value))}
+            style={styles.slider}
+          />
+          <span style={styles.sliderValue}>{filters.saturation}</span>
+        </PropertyRow>
+        <PropertyRow label="Hue Rotation">
+          <input
+            type="range"
+            min={-180}
+            max={180}
+            step={1}
+            value={filters.hueRotation}
+            onChange={(e) => updateFilter('hueRotation', parseFloat(e.target.value))}
+            style={styles.slider}
+          />
+          <span style={styles.sliderValue}>{filters.hueRotation}</span>
+        </PropertyRow>
+        <PropertyRow label="Blur">
+          <input
+            type="range"
+            min={0}
+            max={20}
+            step={0.5}
+            value={filters.blur}
+            onChange={(e) => updateFilter('blur', parseFloat(e.target.value))}
+            style={styles.slider}
+          />
+          <span style={styles.sliderValue}>{filters.blur}</span>
+        </PropertyRow>
+        <button
+          onClick={handleReset}
+          style={{
+            width: '100%',
+            height: 30,
+            border: '1px solid #2a2a3a',
+            borderRadius: 8,
+            backgroundColor: '#1e1e2e',
+            color: '#cdd6f4',
+            fontSize: 12,
+            cursor: 'pointer',
+            marginTop: 6,
+          }}
+        >
+          Reset
+        </button>
       </PropertyGroup>
     </>
   );

@@ -125,7 +125,7 @@ export function EditorProvider({
 
     // Subscribe to store changes to auto-snapshot for undo/redo
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    store.subscribe((state, prevState) => {
+    const unsubHistory = store.subscribe((state, prevState) => {
       if (state.document !== prevState.document) {
         // Debounce snapshots to avoid flooding during drag operations
         if (debounceTimer) clearTimeout(debounceTimer);
@@ -134,6 +134,12 @@ export function EditorProvider({
         }, 300);
       }
     });
+
+    // Store cleanup references on the instance for unmount
+    (instanceRef.current as any)._cleanup = () => {
+      unsubHistory();
+      if (debounceTimer) clearTimeout(debounceTimer);
+    };
   }
 
   const instance = instanceRef.current;
@@ -150,6 +156,7 @@ export function EditorProvider({
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      (instanceRef.current as any)?._cleanup?.();
       const pm = instanceRef.current?.pluginManager;
       if (pm) {
         for (const plugin of pm.getAllPlugins()) {

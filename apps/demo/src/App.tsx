@@ -9,6 +9,20 @@ import {
   createProgressElement,
 } from '@reactcanvas/core';
 
+const STORAGE_KEY = 'reactcanvas-doc';
+
+function loadFromLocalStorage(): Document | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      return JSON.parse(raw) as Document;
+    }
+  } catch (e) {
+    console.warn('Failed to load document from localStorage:', e);
+  }
+  return null;
+}
+
 /**
  * 3 WAYS TO PASS DATA TO WIDGETS:
  *
@@ -169,13 +183,28 @@ function buildDashboardDocument(): Document {
 }
 
 function App() {
-  // Build the dashboard with data pre-populated
-  const [initialDoc] = useState(() => buildDashboardDocument());
+  // Load from localStorage if available, otherwise build the default dashboard
+  const [initialDoc] = useState(() => {
+    const saved = loadFromLocalStorage();
+    if (saved) return saved;
+    return buildDashboardDocument();
+  });
 
-  const handleChange = useCallback((document: Document) => {
-    // Approach #2: React to every change
-    // You could persist to a database, sync with other users, etc.
-    // e.g., debounce(() => api.saveDashboard(document), 1000)
+  const handleChange = useCallback((_doc: Document) => {
+    // React to every change — persist to DB, sync with others, etc.
+  }, []);
+
+  const handleAutoSave = useCallback((doc: Document) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
+    } catch (e) {
+      console.warn('Failed to save document to localStorage:', e);
+    }
+  }, []);
+
+  const handleReset = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY);
+    window.location.reload();
   }, []);
 
   return (
@@ -183,10 +212,36 @@ function App() {
       <DesignEditor
         initialDocument={initialDoc}
         onChange={handleChange}
+        onAutoSave={handleAutoSave}
+        autoSaveInterval={2000}
         showToolbar={true}
         showSidebar={true}
         showInspector={true}
       />
+      <button
+        onClick={handleReset}
+        style={{
+          position: 'fixed',
+          bottom: 16,
+          right: 16,
+          padding: '8px 16px',
+          backgroundColor: '#313244',
+          color: '#cdd6f4',
+          border: '1px solid #45475a',
+          borderRadius: 8,
+          fontSize: 12,
+          fontWeight: 500,
+          cursor: 'pointer',
+          zIndex: 999,
+          opacity: 0.8,
+          transition: 'opacity 0.15s',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+        onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.8')}
+        title="Clear saved data and reload with default dashboard"
+      >
+        Reset Demo
+      </button>
     </div>
   );
 }

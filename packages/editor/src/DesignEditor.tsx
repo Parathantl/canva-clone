@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import type { Document, Plugin } from '@reactcanvas/core';
-import { EditorProvider, useShortcuts } from '@reactcanvas/react';
+import type { Document, Plugin, TextElement } from '@reactcanvas/core';
+import { EditorProvider, useShortcuts, useSelection, useElements, useEditor } from '@reactcanvas/react';
 import { createDefaultPlugins } from '@reactcanvas/plugins';
 import { EditorCanvas } from './canvas/EditorCanvas';
 import { Toolbar } from './ui/Toolbar';
+import { TextToolbar } from './ui/TextToolbar';
 import { Sidebar } from './ui/Sidebar';
 import { Inspector } from './ui/Inspector';
 import { ExportDialog } from './ui/ExportDialog';
@@ -11,6 +12,8 @@ import { WidgetLibrary } from './ui/WidgetLibrary';
 import { Templates } from './ui/Templates';
 import { PresentationMode } from './ui/PresentationMode';
 import { ShortcutHelp } from './ui/ShortcutHelp';
+import { ErrorBoundary } from './ui/ErrorBoundary';
+import { useFontLoader } from './hooks/useFontLoader';
 
 export interface DesignEditorProps {
   initialDocument?: Document;
@@ -64,7 +67,7 @@ export function DesignEditor({
   );
 
   useEffect(() => {
-    if (width && height) return;
+    if (width !== undefined && height !== undefined) return;
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width: w, height: h } = entry.contentRect;
@@ -123,9 +126,33 @@ function EditorInner({
   const [showPresentation, setShowPresentation] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [activePanel, setActivePanel] = useState<SidePanel>('pages');
+  const [handTool, setHandTool] = useState(false);
+  const [isEditingText, setIsEditingText] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const { loadDocument } = useEditor();
+
+  const handleImport = useCallback(
+    (doc: Document) => {
+      loadDocument(doc);
+    },
+    [loadDocument]
+  );
 
   useShortcuts();
+
+  // Detect selected text element for the top text toolbar
+  const { selectedElementIds } = useSelection();
+  const { elements, updateElement } = useElements();
+
+  // Auto-load fonts used by text elements
+  useFontLoader(elements);
+  const selectedTextElement = useMemo(() => {
+    if (selectedElementIds.length !== 1) return null;
+    const el = elements.find((e) => e.id === selectedElementIds[0]);
+    return el?.type === 'text' ? (el as TextElement) : null;
+  }, [selectedElementIds, elements]);
+
+  const textToolbarHeight = selectedTextElement ? 44 : 0;
 
   const layout = useMemo(() => {
     const railWidth = showSidebar ? 56 : 0;
@@ -138,15 +165,16 @@ function EditorInner({
       inspectorWidth,
       toolbarHeight,
       canvasWidth: containerSize.width - railWidth - panelWidth - inspectorWidth,
-      canvasHeight: containerSize.height - toolbarHeight,
+      canvasHeight: containerSize.height - toolbarHeight - textToolbarHeight,
     };
-  }, [showSidebar, activePanel, showInspector, showToolbar, containerSize]);
+  }, [showSidebar, activePanel, showInspector, showToolbar, containerSize, textToolbarHeight]);
 
   const togglePanel = (panel: SidePanel) => {
     setActivePanel((prev) => (prev === panel ? null : panel));
   };
 
   return (
+    <ErrorBoundary>
     <div
       ref={containerRef}
       className={className}
@@ -163,7 +191,32 @@ function EditorInner({
     >
       {/* Top toolbar */}
       {showToolbar && (
-        <Toolbar onExport={() => setShowExport(true)} onPresent={() => setShowPresentation(true)} onShortcuts={() => setShowShortcuts(true)} />
+        <Toolbar
+          onExport={() => setShowExport(true)}
+          onPresent={() => setShowPresentation(true)}
+          onShortcuts={() => setShowShortcuts(true)}
+          handTool={handTool}
+          onHandToolToggle={() => setHandTool((h) => !h)}
+          canvasWidth={layout.canvasWidth}
+          canvasHeight={layout.canvasHeight}
+        />
+      )}
+
+      {/* Text formatting toolbar — shown when a text element is selected */}
+      {selectedTextElement && (
+        <TextToolbar
+          element={selectedTextElement}
+          isEditing={isEditingText}
+          onUpdate={(id, attrs) => updateElement(id, attrs)}
+          style={{
+            borderRadius: 0,
+            border: 'none',
+            borderBottom: '1px solid #2a2a3a',
+            boxShadow: 'none',
+            width: '100%',
+            flexShrink: 0,
+          }}
+        />
       )}
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -216,6 +269,8 @@ function EditorInner({
             width={Math.max(100, layout.canvasWidth)}
             height={Math.max(100, layout.canvasHeight)}
             canvasRef={canvasRef}
+            handTool={handTool}
+            onEditingTextChange={setIsEditingText}
           />
         </div>
 
@@ -228,6 +283,7 @@ function EditorInner({
         onClose={() => setShowExport(false)}
         canvasRef={canvasRef}
         onImageUpload={onImageUpload}
+        onImport={handleImport}
       />
       <PresentationMode
         isOpen={showPresentation}
@@ -238,6 +294,7 @@ function EditorInner({
         onClose={() => setShowShortcuts(false)}
       />
     </div>
+    </ErrorBoundary>
   );
 }
 

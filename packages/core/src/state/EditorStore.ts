@@ -304,13 +304,20 @@ export const createEditorStore = (initialDocument?: Document) => {
         set((state) => {
           const page = activePage(state);
           if (!page) return;
-          const minOrder = Math.min(...page.elements.map((el) => el.layerOrder));
           const idSet = new Set(elementIds);
-          let nextOrder = minOrder - elementIds.length;
+          // Assign selected elements to order 0..n-1, then shift others up
+          let nextOrder = 0;
           for (const el of page.elements) {
             if (idSet.has(el.id)) {
               el.layerOrder = nextOrder++;
             }
+          }
+          // Shift non-selected elements above the selected ones
+          const nonSelected = page.elements
+            .filter((el) => !idSet.has(el.id))
+            .sort((a, b) => a.layerOrder - b.layerOrder);
+          for (const el of nonSelected) {
+            el.layerOrder = nextOrder++;
           }
           state.document.updatedAt = new Date().toISOString();
         }),

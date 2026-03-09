@@ -2,33 +2,49 @@ import React from 'react';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
+  fallback?: React.ReactNode;
+  onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
 }
 
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
+  resetCount: number;
 }
+
+const MAX_RESETS = 3;
 
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, resetCount: 0 };
   }
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
+    this.props.onError?.(error, errorInfo);
   }
 
   handleReset = (): void => {
-    this.setState({ hasError: false, error: null });
+    this.setState((prev) => ({
+      hasError: false,
+      error: null,
+      resetCount: prev.resetCount + 1,
+    }));
   };
 
   render(): React.ReactNode {
     if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
+      const canRetry = this.state.resetCount < MAX_RESETS;
+
       return (
         <div
           style={{
@@ -51,21 +67,27 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           <p style={{ fontSize: 14, color: '#a6adc8', marginBottom: 24, maxWidth: 400 }}>
             {this.state.error?.message || 'An unexpected error occurred.'}
           </p>
-          <button
-            onClick={this.handleReset}
-            style={{
-              padding: '10px 24px',
-              fontSize: 14,
-              fontWeight: 500,
-              color: '#cdd6f4',
-              backgroundColor: '#1e1e2e',
-              border: '1px solid #2a2a3a',
-              borderRadius: 8,
-              cursor: 'pointer',
-            }}
-          >
-            Try Again
-          </button>
+          {canRetry ? (
+            <button
+              onClick={this.handleReset}
+              style={{
+                padding: '10px 24px',
+                fontSize: 14,
+                fontWeight: 500,
+                color: '#cdd6f4',
+                backgroundColor: '#1e1e2e',
+                border: '1px solid #2a2a3a',
+                borderRadius: 8,
+                cursor: 'pointer',
+              }}
+            >
+              Try Again
+            </button>
+          ) : (
+            <p style={{ fontSize: 13, color: '#585878' }}>
+              This error keeps recurring. Please reload the page.
+            </p>
+          )}
         </div>
       );
     }

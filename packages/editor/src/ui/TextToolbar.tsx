@@ -69,12 +69,20 @@ export function TextToolbar({ element, isEditing, onUpdate, style }: TextToolbar
       setSelStyles(null);
       return;
     }
+    let rafId: number | null = null;
     const handleSelectionChange = () => {
-      setSelStyles(getComputedSelectionStyles());
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        setSelStyles(getComputedSelectionStyles());
+      });
     };
     handleSelectionChange();
     document.addEventListener('selectionchange', handleSelectionChange);
-    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
   }, [isEditing]);
 
   // Use computed styles when editing, fall back to element-level properties
@@ -278,7 +286,7 @@ export function TextToolbar({ element, isEditing, onUpdate, style }: TextToolbar
               backgroundColor: color,
               borderRadius: 3,
               cursor: 'pointer',
-              border: color === displayColor ? '2px solid #89b4fa' : '1px solid #45475a',
+              border: color.toLowerCase() === displayColor.toLowerCase() ? '2px solid #89b4fa' : '1px solid #45475a',
               boxSizing: 'border-box' as const,
             }}
             onMouseDown={(e) => {

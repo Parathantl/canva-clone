@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
   useSelection,
   useElements,
@@ -9,6 +9,7 @@ import {
 import {
   createShapeElement,
   createTextElement,
+  createLineElement,
 } from '@reactcanvas/core';
 import { processImageFile } from '../utils/imageUpload';
 
@@ -23,6 +24,8 @@ export function Toolbar({ onExport, onPresent, onShortcuts, handTool, onHandTool
 }) {
   const { selectedElementIds } = useSelection();
   const { addElement, removeElements, duplicateElements, elements } = useElements();
+  const elementCountRef = useRef(elements.length);
+  elementCountRef.current = elements.length;
   const { zoomIn, zoomOut, zoomPercent, zoomToFit, zoomToPercent } = useViewport();
   const { undo, redo } = useHistory();
   const { activePage } = usePages();
@@ -41,16 +44,29 @@ export function Toolbar({ onExport, onPresent, onShortcuts, handTool, onHandTool
         shapeType,
         x: pageCenter.x - 100,
         y: pageCenter.y - 100,
-        layerOrder: elements.length,
+        layerOrder: elementCountRef.current,
         name: shapeType.charAt(0).toUpperCase() + shapeType.slice(1),
       }));
     },
-    [addElement, elements.length, pageCenter.x, pageCenter.y]
+    [addElement, pageCenter.x, pageCenter.y]
   );
 
+  const handleAddLine = useCallback((withArrow: boolean) => {
+    addElement(createLineElement({
+      x: pageCenter.x - 100,
+      y: pageCenter.y,
+      width: 200,
+      height: 0,
+      points: [0, 0, 200, 0],
+      endArrow: withArrow,
+      layerOrder: elementCountRef.current,
+      name: withArrow ? 'Arrow' : 'Line',
+    }));
+  }, [addElement, pageCenter.x, pageCenter.y]);
+
   const handleAddText = useCallback(() => {
-    addElement(createTextElement({ x: pageCenter.x - 150, y: pageCenter.y - 30, layerOrder: elements.length }));
-  }, [addElement, elements.length, pageCenter.x, pageCenter.y]);
+    addElement(createTextElement({ x: pageCenter.x - 150, y: pageCenter.y - 30, layerOrder: elementCountRef.current }));
+  }, [addElement, pageCenter.x, pageCenter.y]);
 
   return (
     <div style={styles.toolbar}>
@@ -63,6 +79,13 @@ export function Toolbar({ onExport, onPresent, onShortcuts, handTool, onHandTool
           <ToolBtn icon={'\u25EF'} tip="Circle" onClick={() => handleAddShape('circle')} />
           <ToolBtn icon={'\u25B3'} tip="Triangle" onClick={() => handleAddShape('triangle')} />
           <ToolBtn icon={'\u2606'} tip="Star" onClick={() => handleAddShape('star')} />
+        </div>
+
+        <div style={styles.divider} />
+
+        <div style={styles.toolGroup}>
+          <ToolBtn icon={'\u2571'} tip="Line" onClick={() => handleAddLine(false)} />
+          <ToolBtn icon={'\u2794'} tip="Arrow" onClick={() => handleAddLine(true)} />
         </div>
 
         <div style={styles.divider} />
@@ -156,6 +179,8 @@ export function Toolbar({ onExport, onPresent, onShortcuts, handTool, onHandTool
 
 function ImageUploadButton() {
   const { addElement, elements } = useElements();
+  const elementCountRef = useRef(elements.length);
+  elementCountRef.current = elements.length;
   const { activePage } = usePages();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const cx = (activePage?.width ?? 1920) / 2;
@@ -166,12 +191,12 @@ function ImageUploadButton() {
       const file = e.target.files?.[0];
       if (!file) return;
       processImageFile(
-        { file, x: cx, y: cy, layerOrder: elements.length },
+        { file, x: cx, y: cy, layerOrder: elementCountRef.current },
         (el) => addElement(el),
       );
       if (fileInputRef.current) fileInputRef.current.value = '';
     },
-    [addElement, elements.length, cx, cy]
+    [addElement, cx, cy]
   );
 
   return (

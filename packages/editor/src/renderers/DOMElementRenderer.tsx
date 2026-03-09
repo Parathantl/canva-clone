@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useRef, useEffect } from 'react';
 import DOMPurify from 'dompurify';
-import type { CanvasElement, ShapeElement, TextElement, ImageElement, ChartElement, KPIElement, TableElement, ProgressElement, EmbedElement, SolidFill, LinearGradientFill } from '@reactcanvas/core';
+import type { CanvasElement, ShapeElement, TextElement, ImageElement, LineElement, ChartElement, KPIElement, TableElement, ProgressElement, EmbedElement, SolidFill, LinearGradientFill, RadialGradientFill } from '@reactcanvas/core';
 import { ChartContent, KPIContent, TableContent, ProgressContent, EmbedContent } from './WidgetRenderers';
 
 interface DOMElementRendererProps {
@@ -61,6 +61,7 @@ export const DOMElementRenderer = memo(function DOMElementRenderer({
   // Auto-resize text elements
   const lastSyncedHeight = useRef(element.height);
   useEffect(() => {
+    lastSyncedHeight.current = element.height;
     if (element.type !== 'text' || !elRef.current || !onAutoResize) return;
     const el = elRef.current;
     const observer = new ResizeObserver((entries) => {
@@ -77,7 +78,7 @@ export const DOMElementRenderer = memo(function DOMElementRenderer({
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [element.id, element.type, onAutoResize]);
+  }, [element.id, element.type, element.height, onAutoResize]);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -86,9 +87,11 @@ export const DOMElementRenderer = memo(function DOMElementRenderer({
       e.stopPropagation();
       e.preventDefault();
       onSelect(element.id, e.shiftKey);
-      onDragStart(element.id, e);
+      if (!element.locked) {
+        onDragStart(element.id, e);
+      }
     },
-    [element.id, isEditing, onSelect, onDragStart]
+    [element.id, element.locked, isEditing, onSelect, onDragStart]
   );
 
   const preventNativeDrag = useCallback((e: React.DragEvent) => {
@@ -137,7 +140,7 @@ export const DOMElementRenderer = memo(function DOMElementRenderer({
         transform: buildTransform(element),
         opacity: element.opacity,
         cursor: isEditing ? 'text' : element.locked ? 'default' : 'move',
-        pointerEvents: element.locked ? 'none' : 'auto',
+        pointerEvents: 'auto',
         outline: isSelected ? '2px solid #4A90D9' : 'none',
         outlineOffset: -1,
         boxSizing: 'border-box',
@@ -244,6 +247,8 @@ const ElementContent = memo(function ElementContent({ element }: { element: Canv
       return <ProgressContent element={element as ProgressElement} />;
     case 'embed':
       return <EmbedContent element={element as EmbedElement} />;
+    case 'line':
+      return <LineContent element={element as LineElement} />;
     case 'group':
       return (
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -273,7 +278,32 @@ function TextContent({
   onEditComplete?: () => void;
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
-  const fillColor = element.fill.type === 'solid' ? (element.fill as SolidFill).color : '#000000';
+  const textColorStyle: React.CSSProperties = (() => {
+    if (element.fill.type === 'solid') {
+      return { color: (element.fill as SolidFill).color };
+    }
+    if (element.fill.type === 'linear-gradient') {
+      const grad = element.fill as LinearGradientFill;
+      const stops = grad.stops.map((s: { offset: number; color: string }) => `${s.color} ${s.offset * 100}%`).join(', ');
+      return {
+        background: `linear-gradient(${grad.angle}deg, ${stops})`,
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        backgroundClip: 'text',
+      };
+    }
+    if (element.fill.type === 'radial-gradient') {
+      const grad = element.fill as RadialGradientFill;
+      const stops = grad.stops.map((s: { offset: number; color: string }) => `${s.color} ${s.offset * 100}%`).join(', ');
+      return {
+        background: `radial-gradient(circle at ${grad.centerX * 100}% ${grad.centerY * 100}%, ${stops})`,
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        backgroundClip: 'text',
+      };
+    }
+    return { color: '#000000' };
+  })();
   const hasHtml = /<[a-z][\s\S]*>/i.test(element.content);
 
   // Focus when entering edit mode — place cursor at end instead of selecting all
@@ -311,7 +341,7 @@ function TextContent({
     return () => document.removeEventListener('mousedown', handleMouseDown, true);
   }, [isEditing, element.id, onContentChange, onEditComplete]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.preventDefault();
       if (editorRef.current && onContentChange) {
@@ -321,7 +351,7 @@ function TextContent({
     }
     // Stop propagation so canvas keyboard shortcuts don't fire while editing
     e.stopPropagation();
-  };
+  }, [element.id, onContentChange, onEditComplete]);
 
   // Save content on input (live sync)
   const handleInput = useCallback(() => {
@@ -338,7 +368,7 @@ function TextContent({
     fontWeight: element.fontWeight,
     fontStyle: element.fontStyle === 'italic' ? 'italic' : 'normal',
     textDecoration: element.textDecoration !== 'none' ? element.textDecoration : undefined,
-    color: fillColor,
+    ...textColorStyle,
     textAlign: element.textAlign,
     lineHeight: element.lineHeight,
     letterSpacing: element.letterSpacing,
@@ -387,10 +417,64 @@ function getFillStyle(fill: ShapeElement['fill']): React.CSSProperties {
   }
   if (fill.type === 'linear-gradient') {
     const grad = fill as LinearGradientFill;
-    const stops = grad.stops.map((s) => `${s.color} ${s.offset * 100}%`).join(', ');
+    const stops = grad.stops.map((s: { offset: number; color: string }) => `${s.color} ${s.offset * 100}%`).join(', ');
     return { background: `linear-gradient(${grad.angle}deg, ${stops})` };
   }
+  if (fill.type === 'radial-gradient') {
+    const grad = fill as RadialGradientFill;
+    const stops = grad.stops.map((s: { offset: number; color: string }) => `${s.color} ${s.offset * 100}%`).join(', ');
+    return { background: `radial-gradient(circle at ${grad.centerX * 100}% ${grad.centerY * 100}%, ${stops})` };
+  }
   return { backgroundColor: '#cccccc' };
+}
+
+function SvgPolygonShape({ element, points }: { element: ShapeElement; points: string }) {
+  const shadowStyle: React.CSSProperties = element.shadow
+    ? { filter: `drop-shadow(${element.shadow.offsetX}px ${element.shadow.offsetY}px ${element.shadow.blur}px ${element.shadow.color})` }
+    : {};
+  const fillColor = element.fill.type === 'solid' ? (element.fill as SolidFill).color : '#cccccc';
+  const gradientId = `grad-${element.id}`;
+
+  return (
+    <svg width="100%" height="100%" viewBox={`0 0 ${element.width} ${element.height}`} style={{ display: 'block', ...shadowStyle }}>
+      {element.fill.type === 'linear-gradient' && (() => {
+        const grad = element.fill as LinearGradientFill;
+        const angle = (grad.angle * Math.PI) / 180;
+        const x1 = 50 - 50 * Math.cos(angle);
+        const y1 = 50 - 50 * Math.sin(angle);
+        const x2 = 50 + 50 * Math.cos(angle);
+        const y2 = 50 + 50 * Math.sin(angle);
+        return (
+          <defs>
+            <linearGradient id={gradientId} x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`}>
+              {grad.stops.map((s: { offset: number; color: string }, i: number) => (
+                <stop key={i} offset={s.offset} stopColor={s.color} />
+              ))}
+            </linearGradient>
+          </defs>
+        );
+      })()}
+      {element.fill.type === 'radial-gradient' && (() => {
+        const grad = element.fill as RadialGradientFill;
+        return (
+          <defs>
+            <radialGradient id={gradientId} cx={`${grad.centerX * 100}%`} cy={`${grad.centerY * 100}%`} r="50%">
+              {grad.stops.map((s: { offset: number; color: string }, i: number) => (
+                <stop key={i} offset={s.offset} stopColor={s.color} />
+              ))}
+            </radialGradient>
+          </defs>
+        );
+      })()}
+      <polygon
+        points={points}
+        fill={element.fill.type === 'solid' ? fillColor : `url(#${gradientId})`}
+        stroke={element.stroke?.width ? element.stroke.color : 'none'}
+        strokeWidth={element.stroke?.width ?? 0}
+        strokeDasharray={element.stroke?.dashPattern?.length ? element.stroke.dashPattern.join(' ') : undefined}
+      />
+    </svg>
+  );
 }
 
 function ShapeContent({ element }: { element: ShapeElement }) {
@@ -404,7 +488,7 @@ function ShapeContent({ element }: { element: ShapeElement }) {
     : {};
   const shadowStyle: React.CSSProperties = element.shadow
     ? {
-        boxShadow: `${element.shadow.offsetX}px ${element.shadow.offsetY}px ${element.shadow.blur}px ${element.shadow.color}`,
+        boxShadow: `${element.shadow.offsetX}px ${element.shadow.offsetY}px ${element.shadow.blur}px ${element.shadow.spread}px ${element.shadow.color}`,
       }
     : {};
 
@@ -426,14 +510,10 @@ function ShapeContent({ element }: { element: ShapeElement }) {
       );
     case 'triangle':
       return (
-        <svg width="100%" height="100%" viewBox={`0 0 ${element.width} ${element.height}`} style={{ display: 'block' }}>
-          <polygon
-            points={`${element.width / 2},0 ${element.width},${element.height} 0,${element.height}`}
-            fill={element.fill.type === 'solid' ? (element.fill as SolidFill).color : '#cccccc'}
-            stroke={element.stroke?.width ? element.stroke.color : 'none'}
-            strokeWidth={element.stroke?.width ?? 0}
-          />
-        </svg>
+        <SvgPolygonShape
+          element={element}
+          points={`${element.width / 2},0 ${element.width},${element.height} 0,${element.height}`}
+        />
       );
     case 'polygon': {
       const sides = element.sides ?? 6;
@@ -444,16 +524,7 @@ function ShapeContent({ element }: { element: ShapeElement }) {
         const angle = (i * 2 * Math.PI) / sides - Math.PI / 2;
         return `${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`;
       }).join(' ');
-      return (
-        <svg width="100%" height="100%" viewBox={`0 0 ${element.width} ${element.height}`} style={{ display: 'block' }}>
-          <polygon
-            points={pts}
-            fill={element.fill.type === 'solid' ? (element.fill as SolidFill).color : '#cccccc'}
-            stroke={element.stroke?.width ? element.stroke.color : 'none'}
-            strokeWidth={element.stroke?.width ?? 0}
-          />
-        </svg>
-      );
+      return <SvgPolygonShape element={element} points={pts} />;
     }
     case 'star': {
       const numPoints = element.points ?? 5;
@@ -466,16 +537,7 @@ function ShapeContent({ element }: { element: ShapeElement }) {
         const r = i % 2 === 0 ? outerR : innerR;
         return `${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`;
       }).join(' ');
-      return (
-        <svg width="100%" height="100%" viewBox={`0 0 ${element.width} ${element.height}`} style={{ display: 'block' }}>
-          <polygon
-            points={pts}
-            fill={element.fill.type === 'solid' ? (element.fill as SolidFill).color : '#cccccc'}
-            stroke={element.stroke?.width ? element.stroke.color : 'none'}
-            strokeWidth={element.stroke?.width ?? 0}
-          />
-        </svg>
-      );
+      return <SvgPolygonShape element={element} points={pts} />;
     }
     default: // rectangle
       return (
@@ -486,7 +548,7 @@ function ShapeContent({ element }: { element: ShapeElement }) {
             borderRadius: typeof element.cornerRadius === 'number'
               ? element.cornerRadius
               : Array.isArray(element.cornerRadius)
-                ? element.cornerRadius.map((r) => `${r}px`).join(' ')
+                ? element.cornerRadius.map((r: number) => `${r}px`).join(' ')
                 : 0,
             boxSizing: 'border-box',
             ...fillStyle,
@@ -496,6 +558,67 @@ function ShapeContent({ element }: { element: ShapeElement }) {
         />
       );
   }
+}
+
+function buildCurvePath(points: number[]): string {
+  if (points.length < 4) return '';
+  const [x1, y1, x2, y2] = points;
+  const cx = (x1 + x2) / 2;
+  const cy = Math.min(y1, y2) - Math.abs(x2 - x1) * 0.2;
+  return `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
+}
+
+function LineContent({ element }: { element: LineElement }) {
+  const { points, stroke, startArrow, endArrow, arrowSize = 10 } = element;
+
+  const w = element.width || 1;
+  const h = Math.max(1, element.height);
+
+  return (
+    <svg
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${w} ${h}`}
+      style={{ position: 'absolute', inset: 0, overflow: 'visible', minHeight: 1 }}
+    >
+      <defs>
+        {endArrow && (
+          <marker id={`arrow-end-${element.id}`} markerWidth={arrowSize} markerHeight={arrowSize}
+            refX={arrowSize - 1} refY={arrowSize / 2} orient="auto">
+            <polygon points={`0 0, ${arrowSize} ${arrowSize / 2}, 0 ${arrowSize}`} fill={stroke.color} />
+          </marker>
+        )}
+        {startArrow && (
+          <marker id={`arrow-start-${element.id}`} markerWidth={arrowSize} markerHeight={arrowSize}
+            refX="1" refY={arrowSize / 2} orient="auto-start-reverse">
+            <polygon points={`0 0, ${arrowSize} ${arrowSize / 2}, 0 ${arrowSize}`} fill={stroke.color} />
+          </marker>
+        )}
+      </defs>
+      {element.lineType === 'curved' && points.length >= 4 ? (
+        <path
+          d={buildCurvePath(points)}
+          stroke={stroke.color}
+          strokeWidth={stroke.width}
+          strokeDasharray={stroke.dashPattern?.join(' ') || undefined}
+          fill="none"
+          markerEnd={endArrow ? `url(#arrow-end-${element.id})` : undefined}
+          markerStart={startArrow ? `url(#arrow-start-${element.id})` : undefined}
+        />
+      ) : (
+        <line
+          x1={points[0] ?? 0} y1={points[1] ?? 0}
+          x2={points[2] ?? w} y2={points[3] ?? h}
+          stroke={stroke.color}
+          strokeWidth={stroke.width}
+          strokeDasharray={stroke.dashPattern?.join(' ') || undefined}
+          strokeLinecap="round"
+          markerEnd={endArrow ? `url(#arrow-end-${element.id})` : undefined}
+          markerStart={startArrow ? `url(#arrow-start-${element.id})` : undefined}
+        />
+      )}
+    </svg>
+  );
 }
 
 function ImageContent({ element }: { element: ImageElement }) {

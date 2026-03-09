@@ -44,42 +44,43 @@ export function applyInlineStyle(styleProp: string, value: string): boolean {
 
   const walker = document.createTreeWalker(walkerRoot, NodeFilter.SHOW_TEXT);
 
-  const textNodes: Text[] = [];
+  // Collect all text nodes and their offsets BEFORE any DOM mutations
+  const entries: Array<{ node: Text; startOffset: number; endOffset: number }> = [];
   while (walker.nextNode()) {
     const node = walker.currentNode as Text;
     if (range.intersectsNode(node)) {
-      textNodes.push(node);
+      let startOffset = 0;
+      let endOffset = node.length;
+      if (node === range.startContainer) startOffset = range.startOffset;
+      if (node === range.endContainer) endOffset = range.endOffset;
+      if (startOffset !== endOffset) {
+        entries.push({ node, startOffset, endOffset });
+      }
     }
   }
 
-  if (textNodes.length === 0) return false;
+  if (entries.length === 0) return false;
 
-  for (const textNode of textNodes) {
-    let startOffset = 0;
-    let endOffset = textNode.length;
+  // Now mutate the DOM — offsets are already cached
+  for (const { node, startOffset, endOffset } of entries) {
+    let targetNode: Text = node;
+    let adjustedEnd = endOffset;
 
-    if (textNode === range.startContainer) startOffset = range.startOffset;
-    if (textNode === range.endContainer) endOffset = range.endOffset;
-
-    if (startOffset === endOffset) continue;
-
-    let targetNode: Text = textNode;
     if (startOffset > 0) {
-      targetNode = textNode.splitText(startOffset);
-      endOffset -= startOffset;
+      targetNode = node.splitText(startOffset);
+      adjustedEnd -= startOffset;
     }
-    if (endOffset < targetNode.length) {
-      targetNode.splitText(endOffset);
+    if (adjustedEnd < targetNode.length) {
+      targetNode.splitText(adjustedEnd);
     }
 
-    // Reuse existing parent span instead of nesting
     const parent = targetNode.parentElement;
     if (parent && parent.tagName === 'SPAN' && parent.childNodes.length === 1) {
       parent.style.setProperty(styleProp, value);
-    } else {
+    } else if (targetNode.parentNode) {
       const span = document.createElement('span');
       span.style.setProperty(styleProp, value);
-      targetNode.parentNode!.insertBefore(span, targetNode);
+      targetNode.parentNode.insertBefore(span, targetNode);
       span.appendChild(targetNode);
     }
   }

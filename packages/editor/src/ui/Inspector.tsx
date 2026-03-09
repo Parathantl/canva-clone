@@ -1,13 +1,14 @@
 import React, { useCallback } from 'react';
 import { useSelection, useElements, usePages } from '@reactcanvas/react';
-import type { CanvasElement, ShapeElement, ChartElement, KPIElement, TableElement, ProgressElement, EmbedElement, ImageElement } from '@reactcanvas/core';
+import type { CanvasElement, ShapeElement, LineElement, ChartElement, KPIElement, TableElement, ProgressElement, EmbedElement, ImageElement, Fill, LinearGradientFill, RadialGradientFill, Shadow } from '@reactcanvas/core';
 import { FILTER_PRESETS, applyFilterPreset } from '@reactcanvas/images';
 import { ColorPicker } from './ColorPicker';
+
+const DEFAULT_SHADOW: Shadow = { color: 'rgba(0,0,0,0.3)', blur: 10, offsetX: 0, offsetY: 4, spread: 0 };
 
 export function Inspector() {
   const { selectedElements, hasSelection, selectionCount } = useSelection();
   const { updateElement, updateElements } = useElements();
-  const { activePage, updatePage } = usePages();
 
   if (!hasSelection) {
     return <PageInspector />;
@@ -142,13 +143,14 @@ export function Inspector() {
 
 // Registry pattern: maps element types to their inspector components
 const INSPECTOR_REGISTRY: Record<string, React.FC<{ element: any }>> = {
-  shape: ({ element }) => <ShapeInspector element={element as ShapeElement} />,
-  chart: ({ element }) => <ChartInspector element={element as ChartElement} />,
-  kpi: ({ element }) => <KPIInspector element={element as KPIElement} />,
-  table: ({ element }) => <TableInspector element={element as TableElement} />,
-  progress: ({ element }) => <ProgressInspector element={element as ProgressElement} />,
-  embed: ({ element }) => <EmbedInspector element={element as EmbedElement} />,
-  image: ({ element }) => <ImageInspector element={element as ImageElement} />,
+  shape: ShapeInspector as React.FC<{ element: any }>,
+  chart: ChartInspector as React.FC<{ element: any }>,
+  kpi: KPIInspector as React.FC<{ element: any }>,
+  table: TableInspector as React.FC<{ element: any }>,
+  progress: ProgressInspector as React.FC<{ element: any }>,
+  embed: EmbedInspector as React.FC<{ element: any }>,
+  image: ImageInspector as React.FC<{ element: any }>,
+  line: LineInspector as React.FC<{ element: any }>,
 };
 
 function TypeSpecificInspector({ element }: { element: CanvasElement }) {
@@ -207,48 +209,198 @@ function PageInspector() {
   );
 }
 
+function GradientStopEditor({ stops, labels, onColorChange, onOffsetChange }: {
+  stops: Array<{ offset: number; color: string }>;
+  labels: [string, string];
+  onColorChange: (index: number, color: string) => void;
+  onOffsetChange: (index: number, offset: number) => void;
+}) {
+  return (
+    <>
+      {stops.map((stop, i) => (
+        <div key={i} style={{ marginBottom: 6 }}>
+          <PropertyRow label={labels[i] ?? `Stop ${i}`}>
+            <input
+              type="color"
+              value={stop.color}
+              onChange={(e) => onColorChange(i, e.target.value)}
+              style={styles.colorInput}
+            />
+            <NumberInput
+              value={Math.round(stop.offset * 100)}
+              onChange={(v) => onOffsetChange(i, v / 100)}
+              min={0}
+              max={100}
+            />
+            <span style={styles.sliderValue}>%</span>
+          </PropertyRow>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function StrokeEditor({ element, minWidth = 0 }: { element: { id: string; stroke: { color: string; width: number; dashPattern?: number[] } }; minWidth?: number }) {
+  const { updateElement } = useElements();
+  return (
+    <PropertyGroup label="Stroke">
+      <ColorPicker
+        color={element.stroke.color}
+        label="Color"
+        onChange={(c) =>
+          updateElement(element.id, {
+            stroke: { ...element.stroke, color: c },
+          } as Partial<CanvasElement>)
+        }
+      />
+      <PropertyRow label="Width">
+        <NumberInput
+          value={element.stroke.width}
+          onChange={(v) =>
+            updateElement(element.id, {
+              stroke: { ...element.stroke, width: v },
+            } as Partial<CanvasElement>)
+          }
+          min={minWidth}
+          max={20}
+        />
+      </PropertyRow>
+    </PropertyGroup>
+  );
+}
+
 function ShapeInspector({ element }: { element: ShapeElement }) {
   const { updateElement } = useElements();
 
+  const fillType = element.fill.type;
   const fillColor = element.fill.type === 'solid' ? element.fill.color : '#cccccc';
+
+  const handleFillTypeChange = (newType: string) => {
+    let newFill: Fill;
+    if (newType === 'solid') {
+      newFill = { type: 'solid', color: '#89b4fa' };
+    } else if (newType === 'linear-gradient') {
+      newFill = {
+        type: 'linear-gradient',
+        angle: 135,
+        stops: [
+          { offset: 0, color: '#89b4fa' },
+          { offset: 1, color: '#cba6f7' },
+        ],
+      };
+    } else {
+      newFill = {
+        type: 'radial-gradient',
+        centerX: 0.5,
+        centerY: 0.5,
+        radius: 0.5,
+        stops: [
+          { offset: 0, color: '#89b4fa' },
+          { offset: 1, color: '#cba6f7' },
+        ],
+      };
+    }
+    updateElement(element.id, { fill: newFill } as Partial<CanvasElement>);
+  };
+
+  const updateGradientStopProp = (index: number, updates: Partial<{ offset: number; color: string }>) => {
+    const grad = element.fill as LinearGradientFill | RadialGradientFill;
+    const newStops = grad.stops.map((s: { offset: number; color: string }, i: number) =>
+      i === index ? { ...s, ...updates } : s
+    );
+    updateElement(element.id, {
+      fill: { ...grad, stops: newStops },
+    } as Partial<CanvasElement>);
+  };
+
+  const hasShadow = !!element.shadow;
+  const shadow = element.shadow ?? DEFAULT_SHADOW;
+
+  const handleToggleShadow = (enabled: boolean) => {
+    if (enabled) {
+      updateElement(element.id, {
+        shadow: { ...DEFAULT_SHADOW },
+      } as Partial<CanvasElement>);
+    } else {
+      updateElement(element.id, {
+        shadow: undefined,
+      } as Partial<CanvasElement>);
+    }
+  };
+
+  const updateShadow = (updates: Partial<Shadow>) => {
+    updateElement(element.id, {
+      shadow: { ...shadow, ...updates },
+    } as Partial<CanvasElement>);
+  };
 
   return (
     <>
       <PropertyGroup label="Fill">
-        <ColorPicker
-          color={fillColor}
-          label="Color"
-          onChange={(c) =>
-            updateElement(element.id, {
-              fill: { type: 'solid', color: c },
-            } as Partial<CanvasElement>)
-          }
-        />
-      </PropertyGroup>
+        <PropertyRow label="Type">
+          <select
+            value={fillType}
+            onChange={(e) => handleFillTypeChange(e.target.value)}
+            style={styles.select}
+          >
+            <option value="solid">Solid</option>
+            <option value="linear-gradient">Linear Gradient</option>
+            <option value="radial-gradient">Radial Gradient</option>
+          </select>
+        </PropertyRow>
 
-      <PropertyGroup label="Stroke">
-        <ColorPicker
-          color={element.stroke.color}
-          label="Color"
-          onChange={(c) =>
-            updateElement(element.id, {
-              stroke: { ...element.stroke, color: c },
-            } as Partial<CanvasElement>)
-          }
-        />
-        <PropertyRow label="Width">
-          <NumberInput
-            value={element.stroke.width}
-            onChange={(v) =>
+        {fillType === 'solid' && (
+          <ColorPicker
+            color={fillColor}
+            label="Color"
+            onChange={(c) =>
               updateElement(element.id, {
-                stroke: { ...element.stroke, width: v },
+                fill: { type: 'solid', color: c },
               } as Partial<CanvasElement>)
             }
-            min={0}
-            max={20}
           />
-        </PropertyRow>
+        )}
+
+        {fillType === 'linear-gradient' && (() => {
+          const grad = element.fill as LinearGradientFill;
+          return (
+            <>
+              <PropertyRow label="Angle">
+                <NumberInput
+                  value={grad.angle}
+                  onChange={(v) =>
+                    updateElement(element.id, {
+                      fill: { ...grad, angle: v },
+                    } as Partial<CanvasElement>)
+                  }
+                  min={0}
+                  max={360}
+                />
+              </PropertyRow>
+              <GradientStopEditor
+                stops={grad.stops}
+                labels={['Start', 'End']}
+                onColorChange={(i, color) => updateGradientStopProp(i, { color })}
+                onOffsetChange={(i, offset) => updateGradientStopProp(i, { offset })}
+              />
+            </>
+          );
+        })()}
+
+        {fillType === 'radial-gradient' && (() => {
+          const grad = element.fill as RadialGradientFill;
+          return (
+            <GradientStopEditor
+              stops={grad.stops}
+              labels={['Center', 'Edge']}
+              onColorChange={(i, color) => updateGradientStopProp(i, { color })}
+              onOffsetChange={(i, offset) => updateGradientStopProp(i, { offset })}
+            />
+          );
+        })()}
       </PropertyGroup>
+
+      <StrokeEditor element={element} minWidth={0} />
 
       {element.shapeType === 'rectangle' && (
         <PropertyGroup label="Corner Radius">
@@ -266,10 +418,125 @@ function ShapeInspector({ element }: { element: ShapeElement }) {
           </PropertyRow>
         </PropertyGroup>
       )}
+
+      <PropertyGroup label="Shadow">
+        <PropertyRow label="Enable">
+          <input
+            type="checkbox"
+            checked={hasShadow}
+            onChange={(e) => handleToggleShadow(e.target.checked)}
+          />
+        </PropertyRow>
+        {hasShadow && (
+          <>
+            <ColorPicker
+              color={shadow.color}
+              label="Color"
+              onChange={(c) => updateShadow({ color: c })}
+            />
+            <PropertyRow label="Blur">
+              <NumberInput
+                value={shadow.blur}
+                onChange={(v) => updateShadow({ blur: v })}
+                min={0}
+                max={50}
+              />
+            </PropertyRow>
+            <PropertyRow label="Offset X">
+              <NumberInput
+                value={shadow.offsetX}
+                onChange={(v) => updateShadow({ offsetX: v })}
+                min={-50}
+                max={50}
+              />
+            </PropertyRow>
+            <PropertyRow label="Offset Y">
+              <NumberInput
+                value={shadow.offsetY}
+                onChange={(v) => updateShadow({ offsetY: v })}
+                min={-50}
+                max={50}
+              />
+            </PropertyRow>
+            <PropertyRow label="Spread">
+              <NumberInput
+                value={shadow.spread}
+                onChange={(v) => updateShadow({ spread: v })}
+                min={-20}
+                max={20}
+              />
+            </PropertyRow>
+          </>
+        )}
+      </PropertyGroup>
     </>
   );
 }
 
+
+function LineInspector({ element }: { element: LineElement }) {
+  const { updateElement } = useElements();
+
+  return (
+    <>
+      <StrokeEditor element={element} minWidth={1} />
+
+      <PropertyGroup label="Line Style">
+        <PropertyRow label="Type">
+          <select
+            value={element.lineType}
+            onChange={(e) =>
+              updateElement(element.id, {
+                lineType: e.target.value,
+              } as Partial<CanvasElement>)
+            }
+            style={styles.select}
+          >
+            <option value="straight">Straight</option>
+            <option value="curved">Curved</option>
+          </select>
+        </PropertyRow>
+      </PropertyGroup>
+
+      <PropertyGroup label="Arrows">
+        <PropertyRow label="Start Arrow">
+          <input
+            type="checkbox"
+            checked={element.startArrow}
+            onChange={(e) =>
+              updateElement(element.id, {
+                startArrow: e.target.checked,
+              } as Partial<CanvasElement>)
+            }
+          />
+        </PropertyRow>
+        <PropertyRow label="End Arrow">
+          <input
+            type="checkbox"
+            checked={element.endArrow}
+            onChange={(e) =>
+              updateElement(element.id, {
+                endArrow: e.target.checked,
+              } as Partial<CanvasElement>)
+            }
+          />
+        </PropertyRow>
+        <PropertyRow label="Arrow Size">
+          <NumberInput
+            value={element.arrowSize}
+            onChange={(v) =>
+              updateElement(element.id, {
+                arrowSize: v,
+              } as Partial<CanvasElement>)
+            }
+            min={5}
+            max={30}
+          />
+        </PropertyRow>
+      </PropertyGroup>
+    </>
+  );
+}
 
 function PropertyGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -596,6 +863,14 @@ const DEFAULT_FILTERS = {
   preset: '',
 } as const;
 
+const FILTER_SLIDERS = [
+  { key: 'brightness', label: 'Brightness', min: -100, max: 100, step: 1 },
+  { key: 'contrast', label: 'Contrast', min: -100, max: 100, step: 1 },
+  { key: 'saturation', label: 'Saturation', min: -100, max: 100, step: 1 },
+  { key: 'hueRotation', label: 'Hue Rotation', min: -180, max: 180, step: 1 },
+  { key: 'blur', label: 'Blur', min: 0, max: 20, step: 0.5 },
+] as const;
+
 function ImageInspector({ element }: { element: ImageElement }) {
   const { updateElement } = useElements();
 
@@ -642,79 +917,23 @@ function ImageInspector({ element }: { element: ImageElement }) {
             ))}
           </select>
         </PropertyRow>
-        <PropertyRow label="Brightness">
-          <input
-            type="range"
-            min={-100}
-            max={100}
-            step={1}
-            value={filters.brightness}
-            onChange={(e) => updateFilter('brightness', parseFloat(e.target.value))}
-            style={styles.slider}
-          />
-          <span style={styles.sliderValue}>{filters.brightness}</span>
-        </PropertyRow>
-        <PropertyRow label="Contrast">
-          <input
-            type="range"
-            min={-100}
-            max={100}
-            step={1}
-            value={filters.contrast}
-            onChange={(e) => updateFilter('contrast', parseFloat(e.target.value))}
-            style={styles.slider}
-          />
-          <span style={styles.sliderValue}>{filters.contrast}</span>
-        </PropertyRow>
-        <PropertyRow label="Saturation">
-          <input
-            type="range"
-            min={-100}
-            max={100}
-            step={1}
-            value={filters.saturation}
-            onChange={(e) => updateFilter('saturation', parseFloat(e.target.value))}
-            style={styles.slider}
-          />
-          <span style={styles.sliderValue}>{filters.saturation}</span>
-        </PropertyRow>
-        <PropertyRow label="Hue Rotation">
-          <input
-            type="range"
-            min={-180}
-            max={180}
-            step={1}
-            value={filters.hueRotation}
-            onChange={(e) => updateFilter('hueRotation', parseFloat(e.target.value))}
-            style={styles.slider}
-          />
-          <span style={styles.sliderValue}>{filters.hueRotation}</span>
-        </PropertyRow>
-        <PropertyRow label="Blur">
-          <input
-            type="range"
-            min={0}
-            max={20}
-            step={0.5}
-            value={filters.blur}
-            onChange={(e) => updateFilter('blur', parseFloat(e.target.value))}
-            style={styles.slider}
-          />
-          <span style={styles.sliderValue}>{filters.blur}</span>
-        </PropertyRow>
+        {FILTER_SLIDERS.map((slider) => (
+          <PropertyRow key={slider.key} label={slider.label}>
+            <input
+              type="range"
+              min={slider.min}
+              max={slider.max}
+              step={slider.step}
+              value={filters[slider.key]}
+              onChange={(e) => updateFilter(slider.key, parseFloat(e.target.value))}
+              style={styles.slider}
+            />
+            <span style={styles.sliderValue}>{filters[slider.key]}</span>
+          </PropertyRow>
+        ))}
         <button
           onClick={handleReset}
-          style={{
-            width: '100%',
-            height: 30,
-            border: '1px solid #2a2a3a',
-            borderRadius: 8,
-            backgroundColor: '#1e1e2e',
-            color: '#cdd6f4',
-            fontSize: 12,
-            cursor: 'pointer',
-            marginTop: 6,
-          }}
+          style={styles.resetButton}
         >
           Reset
         </button>
@@ -833,6 +1052,17 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: 30,
     textAlign: 'right' as const,
   },
+  resetButton: {
+    width: '100%',
+    height: 30,
+    border: '1px solid #2a2a3a',
+    borderRadius: 8,
+    backgroundColor: '#1e1e2e',
+    color: '#cdd6f4',
+    fontSize: 12,
+    cursor: 'pointer',
+    marginTop: 6,
+  },
 };
 
 // Alignment tools for multi-select
@@ -840,61 +1070,41 @@ function AlignmentTools({ elements, updateElements }: {
   elements: CanvasElement[];
   updateElements: (updates: Array<{ id: string; changes: Partial<CanvasElement> }>) => void;
 }) {
-  const alignLeft = () => {
-    const minX = Math.min(...elements.map((e) => e.x));
-    updateElements(elements.map((el) => ({ id: el.id, changes: { x: minX } as Partial<CanvasElement> })));
+  type Axis = 'x' | 'y';
+  const posKey = (axis: Axis) => axis;
+  const sizeKey = (axis: Axis): 'width' | 'height' => axis === 'x' ? 'width' : 'height';
+
+  const alignStart = (axis: Axis) => {
+    const minVal = Math.min(...elements.map((e) => e[posKey(axis)]));
+    updateElements(elements.map((el) => ({ id: el.id, changes: { [posKey(axis)]: minVal } as Partial<CanvasElement> })));
   };
-  const alignCenterH = () => {
-    const minX = Math.min(...elements.map((e) => e.x));
-    const maxX = Math.max(...elements.map((e) => e.x + e.width));
-    const center = (minX + maxX) / 2;
-    updateElements(elements.map((el) => ({ id: el.id, changes: { x: center - el.width / 2 } as Partial<CanvasElement> })));
+
+  const alignCenter = (axis: Axis) => {
+    const minVal = Math.min(...elements.map((e) => e[posKey(axis)]));
+    const maxVal = Math.max(...elements.map((e) => e[posKey(axis)] + e[sizeKey(axis)]));
+    const center = (minVal + maxVal) / 2;
+    updateElements(elements.map((el) => ({ id: el.id, changes: { [posKey(axis)]: center - el[sizeKey(axis)] / 2 } as Partial<CanvasElement> })));
   };
-  const alignRight = () => {
-    const maxX = Math.max(...elements.map((e) => e.x + e.width));
-    updateElements(elements.map((el) => ({ id: el.id, changes: { x: maxX - el.width } as Partial<CanvasElement> })));
+
+  const alignEnd = (axis: Axis) => {
+    const maxVal = Math.max(...elements.map((e) => e[posKey(axis)] + e[sizeKey(axis)]));
+    updateElements(elements.map((el) => ({ id: el.id, changes: { [posKey(axis)]: maxVal - el[sizeKey(axis)] } as Partial<CanvasElement> })));
   };
-  const alignTop = () => {
-    const minY = Math.min(...elements.map((e) => e.y));
-    updateElements(elements.map((el) => ({ id: el.id, changes: { y: minY } as Partial<CanvasElement> })));
-  };
-  const alignMiddle = () => {
-    const minY = Math.min(...elements.map((e) => e.y));
-    const maxY = Math.max(...elements.map((e) => e.y + e.height));
-    const center = (minY + maxY) / 2;
-    updateElements(elements.map((el) => ({ id: el.id, changes: { y: center - el.height / 2 } as Partial<CanvasElement> })));
-  };
-  const alignBottom = () => {
-    const maxY = Math.max(...elements.map((e) => e.y + e.height));
-    updateElements(elements.map((el) => ({ id: el.id, changes: { y: maxY - el.height } as Partial<CanvasElement> })));
-  };
-  const distributeH = () => {
+
+  const distribute = (axis: Axis) => {
     if (elements.length < 3) return;
-    const sorted = [...elements].sort((a, b) => a.x - b.x);
+    const pos = posKey(axis);
+    const size = sizeKey(axis);
+    const sorted = [...elements].sort((a, b) => a[pos] - b[pos]);
     const first = sorted[0], last = sorted[sorted.length - 1];
-    const totalSpace = (last.x + last.width) - first.x;
-    const totalWidth = sorted.reduce((s, e) => s + e.width, 0);
-    const gap = (totalSpace - totalWidth) / (sorted.length - 1);
+    const totalSpace = (last[pos] + last[size]) - first[pos];
+    const totalSize = sorted.reduce((s, e) => s + e[size], 0);
+    const gap = Math.max(0, (totalSpace - totalSize) / (sorted.length - 1));
     const updates: Array<{ id: string; changes: Partial<CanvasElement> }> = [];
-    let cx = first.x + first.width + gap;
+    let cursor = first[pos] + first[size] + gap;
     for (let i = 1; i < sorted.length - 1; i++) {
-      updates.push({ id: sorted[i].id, changes: { x: cx } as Partial<CanvasElement> });
-      cx += sorted[i].width + gap;
-    }
-    updateElements(updates);
-  };
-  const distributeV = () => {
-    if (elements.length < 3) return;
-    const sorted = [...elements].sort((a, b) => a.y - b.y);
-    const first = sorted[0], last = sorted[sorted.length - 1];
-    const totalSpace = (last.y + last.height) - first.y;
-    const totalHeight = sorted.reduce((s, e) => s + e.height, 0);
-    const gap = (totalSpace - totalHeight) / (sorted.length - 1);
-    const updates: Array<{ id: string; changes: Partial<CanvasElement> }> = [];
-    let cy = first.y + first.height + gap;
-    for (let i = 1; i < sorted.length - 1; i++) {
-      updates.push({ id: sorted[i].id, changes: { y: cy } as Partial<CanvasElement> });
-      cy += sorted[i].height + gap;
+      updates.push({ id: sorted[i].id, changes: { [pos]: cursor } as Partial<CanvasElement> });
+      cursor += sorted[i][size] + gap;
     }
     updateElements(updates);
   };
@@ -920,19 +1130,19 @@ function AlignmentTools({ elements, updateElements }: {
         Align
       </div>
       <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
-        <button style={btnStyle} onClick={alignLeft} title="Align Left">{'\u258C'}</button>
-        <button style={btnStyle} onClick={alignCenterH} title="Align Center H">{'\u2503'}</button>
-        <button style={btnStyle} onClick={alignRight} title="Align Right">{'\u2590'}</button>
-        <button style={btnStyle} onClick={alignTop} title="Align Top">{'\u2580'}</button>
-        <button style={btnStyle} onClick={alignMiddle} title="Align Middle">{'\u2501'}</button>
-        <button style={btnStyle} onClick={alignBottom} title="Align Bottom">{'\u2584'}</button>
+        <button style={btnStyle} onClick={() => alignStart('x')} title="Align Left">{'\u258C'}</button>
+        <button style={btnStyle} onClick={() => alignCenter('x')} title="Align Center H">{'\u2503'}</button>
+        <button style={btnStyle} onClick={() => alignEnd('x')} title="Align Right">{'\u2590'}</button>
+        <button style={btnStyle} onClick={() => alignStart('y')} title="Align Top">{'\u2580'}</button>
+        <button style={btnStyle} onClick={() => alignCenter('y')} title="Align Middle">{'\u2501'}</button>
+        <button style={btnStyle} onClick={() => alignEnd('y')} title="Align Bottom">{'\u2584'}</button>
       </div>
       {elements.length >= 3 && (
         <div style={{ display: 'flex', gap: 4 }}>
-          <button style={{ ...btnStyle, flex: 1, fontSize: 10, width: 'auto' }} onClick={distributeH} title="Distribute Horizontally">
+          <button style={{ ...btnStyle, flex: 1, fontSize: 10, width: 'auto' }} onClick={() => distribute('x')} title="Distribute Horizontally">
             Distribute H
           </button>
-          <button style={{ ...btnStyle, flex: 1, fontSize: 10, width: 'auto' }} onClick={distributeV} title="Distribute Vertically">
+          <button style={{ ...btnStyle, flex: 1, fontSize: 10, width: 'auto' }} onClick={() => distribute('y')} title="Distribute Vertically">
             Distribute V
           </button>
         </div>

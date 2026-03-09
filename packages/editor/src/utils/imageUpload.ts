@@ -1,20 +1,32 @@
 import { createImageElement } from '@reactcanvas/core';
 import type { CanvasElement } from '@reactcanvas/core';
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml', 'image/gif'];
+
 export interface ImageUploadOptions {
   file: File;
   x: number;
   y: number;
   layerOrder: number;
   maxDim?: number;
+  maxFileSize?: number;
 }
 
 export function processImageFile(
   options: ImageUploadOptions,
   onReady: (element: CanvasElement) => void,
+  onError?: (message: string) => void,
 ) {
-  const { file, x, y, layerOrder, maxDim = 600 } = options;
-  if (!file.type.startsWith('image/')) return;
+  const { file, x, y, layerOrder, maxDim = 600, maxFileSize = MAX_FILE_SIZE } = options;
+  if (!ALLOWED_TYPES.includes(file.type)) {
+    onError?.(`Unsupported file type: ${file.type}`);
+    return;
+  }
+  if (file.size > maxFileSize) {
+    onError?.(`File too large: ${(file.size / 1024 / 1024).toFixed(1)}MB (max ${(maxFileSize / 1024 / 1024).toFixed(0)}MB)`);
+    return;
+  }
   const reader = new FileReader();
   reader.onerror = () => console.error('Failed to read image file');
   reader.onload = (ev) => {

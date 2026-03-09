@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef } from 'react';
 import { FontManager } from '@reactcanvas/text';
 import type { CanvasElement } from '@reactcanvas/core';
 
@@ -11,22 +11,19 @@ export function useFontLoader(elements: CanvasElement[]): void {
   const loadedRef = useRef<Set<string>>(new Set());
   const failedRef = useRef<Map<string, number>>(new Map());
 
-  // Stable dependency — only recomputes when text element fonts actually change
-  const fontFamilies = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          elements
-            .filter((el) => el.type === 'text')
-            .map((el) => (el as { fontFamily: string }).fontFamily)
-            .filter(Boolean)
-        )
-      ),
-    [elements]
-  );
+  // Build a stable string key from font families to avoid depending on the elements array reference
+  const fontKey = elements
+    .filter((el) => el.type === 'text')
+    .map((el) => (el as { fontFamily: string }).fontFamily)
+    .filter(Boolean)
+    .sort()
+    .join(',');
 
   useEffect(() => {
-    for (const family of fontFamilies) {
+    if (!fontKey) return;
+    const families = [...new Set(fontKey.split(','))];
+
+    for (const family of families) {
       if (loadedRef.current.has(family)) continue;
 
       const retries = failedRef.current.get(family) ?? 0;
@@ -38,5 +35,5 @@ export function useFontLoader(elements: CanvasElement[]): void {
         failedRef.current.set(family, retries + 1);
       });
     }
-  }, [fontFamilies]);
+  }, [fontKey]);
 }

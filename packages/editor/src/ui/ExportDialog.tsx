@@ -36,10 +36,20 @@ export function ExportDialog({ isOpen, onClose, canvasRef, onImageUpload, onImpo
       const reader = new FileReader();
       reader.onload = () => {
         try {
-          const parsed = JSON.parse(reader.result as string) as Document;
-          if (!parsed.pages || !Array.isArray(parsed.pages)) {
-            setImportError('Invalid document: missing pages array');
+          const parsed = JSON.parse(reader.result as string);
+          if (!parsed || typeof parsed !== 'object') {
+            setImportError('Invalid JSON format');
             return;
+          }
+          if (!Array.isArray(parsed.pages) || parsed.pages.length === 0) {
+            setImportError('Invalid document: missing or empty pages array');
+            return;
+          }
+          for (const page of parsed.pages) {
+            if (!page || typeof page !== 'object' || !Array.isArray(page.elements)) {
+              setImportError('Invalid document: pages must contain elements arrays');
+              return;
+            }
           }
           setImportError(null);
           onImport?.(parsed);
@@ -107,10 +117,14 @@ export function ExportDialog({ isOpen, onClose, canvasRef, onImageUpload, onImpo
 
       // If external upload handler is provided, use it
       if (onImageUpload) {
-        const url = await onImageUpload(blob, filename);
-        setUploadedUrl(url);
-        setIsExporting(false);
-        return; // Don't close — show the URL
+        try {
+          const url = await onImageUpload(blob, filename);
+          setUploadedUrl(url);
+        } catch (uploadErr) {
+          console.error('Upload failed:', uploadErr);
+          setImportError(`Upload failed: ${uploadErr instanceof Error ? uploadErr.message : 'Unknown error'}`);
+        }
+        return; // Don't close — show the URL or error (finally block handles setIsExporting)
       }
 
       // Otherwise download locally
@@ -150,7 +164,7 @@ export function ExportDialog({ isOpen, onClose, canvasRef, onImageUpload, onImpo
             </select>
           </div>
 
-          {(format === 'png' || format === 'jpg') && (
+          {format !== 'json' && (
             <div style={styles.field}>
               <label style={styles.label}>DPI</label>
               <select

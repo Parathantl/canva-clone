@@ -49,21 +49,30 @@ export function DesignEditor({
   className,
   style,
 }: DesignEditorProps) {
-  const allPlugins = plugins ?? createDefaultPlugins();
+  const allPlugins = useMemo(() => plugins ?? createDefaultPlugins(), [plugins]);
   const [containerSize, setContainerSize] = useState({ width: width ?? 1200, height: height ?? 800 });
   const containerRef = useRef<HTMLDivElement>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onAutoSaveRef = useRef(onAutoSave);
+  onAutoSaveRef.current = onAutoSave;
+
+  // Clear auto-save timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, []);
 
   // Combined onChange: call user's onChange immediately + debounce onAutoSave
   const handleChange = useCallback(
     (doc: Document) => {
       onChange?.(doc);
-      if (onAutoSave) {
+      if (onAutoSaveRef.current) {
         if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-        autoSaveTimerRef.current = setTimeout(() => onAutoSave(doc), autoSaveInterval);
+        autoSaveTimerRef.current = setTimeout(() => onAutoSaveRef.current?.(doc), autoSaveInterval);
       }
     },
-    [onChange, onAutoSave, autoSaveInterval]
+    [onChange, autoSaveInterval]
   );
 
   useEffect(() => {
@@ -169,9 +178,9 @@ function EditorInner({
     };
   }, [showSidebar, activePanel, showInspector, showToolbar, containerSize, textToolbarHeight]);
 
-  const togglePanel = (panel: SidePanel) => {
+  const togglePanel = useCallback((panel: SidePanel) => {
     setActivePanel((prev) => (prev === panel ? null : panel));
-  };
+  }, []);
 
   return (
     <ErrorBoundary>

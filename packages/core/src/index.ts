@@ -23,6 +23,12 @@ export {
   createImageElement,
   createFramedImageElement,
   createLineElement,
+  createChartElement,
+  createKPIElement,
+  createTableElement,
+  createProgressElement,
+  createEmbedElement,
+  DEFAULT_CHART_COLORS,
 } from './factories/DocumentFactory';
 
 // Plugin System (Strategy Pattern)

@@ -12,6 +12,8 @@ export interface BaseElement {
   layerOrder: number;
   visible: boolean;
   name: string;
+  flipX?: boolean;
+  flipY?: boolean;
 }
 
 // Shape fill types
@@ -142,6 +144,91 @@ export interface SVGElement extends BaseElement {
   stroke: Stroke;
 }
 
+// Chart element types
+export type ChartType = 'bar' | 'line' | 'pie' | 'donut' | 'area';
+
+export interface ChartDataPoint {
+  label: string;
+  value: number;
+  color?: string;
+}
+
+export interface ChartElement extends BaseElement {
+  type: 'chart';
+  chartType: ChartType;
+  data: ChartDataPoint[];
+  title: string;
+  showLegend: boolean;
+  showLabels: boolean;
+  showGrid: boolean;
+  colors: string[];
+  backgroundColor: string;
+  borderRadius: number;
+}
+
+// KPI / Metric card
+export type TrendDirection = 'up' | 'down' | 'neutral';
+
+export interface KPIElement extends BaseElement {
+  type: 'kpi';
+  value: string;
+  label: string;
+  prefix: string;
+  suffix: string;
+  trend: TrendDirection;
+  trendValue: string;
+  backgroundColor: string;
+  valueColor: string;
+  labelColor: string;
+  trendColor: string;
+  borderRadius: number;
+  icon: string;
+}
+
+// Table element
+export interface TableElement extends BaseElement {
+  type: 'table';
+  headers: string[];
+  rows: string[][];
+  headerBg: string;
+  headerColor: string;
+  rowBg: string;
+  altRowBg: string;
+  cellColor: string;
+  borderColor: string;
+  borderRadius: number;
+  fontSize: number;
+}
+
+// Progress / Gauge element
+export type ProgressStyle = 'bar' | 'circle' | 'semicircle';
+
+export interface ProgressElement extends BaseElement {
+  type: 'progress';
+  progressStyle: ProgressStyle;
+  value: number; // 0-100
+  maxValue: number;
+  label: string;
+  showValue: boolean;
+  trackColor: string;
+  fillColor: string;
+  valueColor: string;
+  labelColor: string;
+  backgroundColor: string;
+  borderRadius: number;
+  thickness: number;
+}
+
+// Embed / iframe element
+export interface EmbedElement extends BaseElement {
+  type: 'embed';
+  embedType: 'video' | 'website' | 'map';
+  url: string;
+  backgroundColor: string;
+  borderRadius: number;
+  showBorder: boolean;
+}
+
 // Union of all element types
 export type CanvasElement =
   | ShapeElement
@@ -150,7 +237,12 @@ export type CanvasElement =
   | FramedImageElement
   | GroupElement
   | LineElement
-  | SVGElement;
+  | SVGElement
+  | ChartElement
+  | KPIElement
+  | TableElement
+  | ProgressElement
+  | EmbedElement;
 
 // Page model
 export interface Page {

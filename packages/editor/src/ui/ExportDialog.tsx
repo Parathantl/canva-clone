@@ -1,78 +1,91 @@
 import React, { useState, useCallback } from 'react';
 import { useEditor } from '@reactcanvas/react';
-import { exportToSvg, exportToJson, downloadString, downloadBlob } from '@reactcanvas/export';
+import { exportToJson, downloadString, downloadBlob } from '@reactcanvas/export';
+import html2canvas from 'html2canvas';
 
-interface ExportDialogProps {
+export interface ExportDialogProps {
   isOpen: boolean;
   onClose: () => void;
   canvasRef: React.RefObject<HTMLDivElement>;
+  /** External image upload handler — receives a Blob, returns a URL string */
+  onImageUpload?: (blob: Blob, filename: string) => Promise<string>;
 }
 
-export function ExportDialog({ isOpen, onClose, canvasRef }: ExportDialogProps) {
+export function ExportDialog({ isOpen, onClose, canvasRef, onImageUpload }: ExportDialogProps) {
   const { document } = useEditor();
   const [format, setFormat] = useState('png');
   const [quality, setQuality] = useState(0.92);
   const [dpi, setDpi] = useState(72);
   const [isExporting, setIsExporting] = useState(false);
+  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
 
   const handleExport = useCallback(async () => {
     setIsExporting(true);
+    setUploadedUrl(null);
     try {
-      switch (format) {
-        case 'png':
-        case 'jpg': {
-          // Export as SVG and convert to raster
-          const svg = exportToSvg(document.pages);
-          const svgBlob = new Blob([svg], { type: 'image/svg+xml' });
-          const url = URL.createObjectURL(svgBlob);
-          const img = new Image();
-          img.onload = () => {
-            const scale = dpi / 72;
-            const page = document.pages[0];
-            const w = (page?.width ?? 1920) * scale;
-            const h = (page?.height ?? 1080) * scale;
-            const canvas = window.document.createElement('canvas');
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              if (format === 'jpg') {
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, w, h);
-              }
-              ctx.drawImage(img, 0, 0, w, h);
-              const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
-              canvas.toBlob(
-                (blob: Blob | null) => {
-                  if (blob) downloadBlob(blob, `${document.name}.${format}`);
-                },
-                mimeType,
-                format === 'jpg' ? quality : undefined
-              );
-            }
-            URL.revokeObjectURL(url);
-          };
-          img.src = url;
-          break;
-        }
-        case 'svg': {
-          const svg = exportToSvg(document.pages);
-          downloadString(svg, `${document.name}.svg`, 'image/svg+xml');
-          break;
-        }
-        case 'json': {
-          const json = exportToJson(document.pages);
-          downloadString(json, `${document.name}.json`, 'application/json');
-          break;
-        }
+      if (format === 'json') {
+        const json = exportToJson(document.pages);
+        downloadString(json, `${document.name}.json`, 'application/json');
+        onClose();
+        return;
       }
+
+      // Use html2canvas for reliable DOM-based rasterization
+      const target = canvasRef.current;
+      if (!target) {
+        console.error('Canvas ref not available');
+        return;
+      }
+
+      const scale = dpi / 72;
+      const canvas = await html2canvas(target, {
+        scale,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: null,
+        logging: false,
+      });
+
+      if (format === 'svg') {
+        // For SVG, create an SVG wrapper with embedded image
+        const dataUrl = canvas.toDataURL('image/png');
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width / scale}" height="${canvas.height / scale}" viewBox="0 0 ${canvas.width / scale} ${canvas.height / scale}">
+  <image width="${canvas.width / scale}" height="${canvas.height / scale}" href="${dataUrl}" />
+</svg>`;
+        downloadString(svg, `${document.name}.svg`, 'image/svg+xml');
+        onClose();
+        return;
+      }
+
+      // PNG or JPG
+      const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
+      const blob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob(
+          (b: Blob | null) => resolve(b!),
+          mimeType,
+          format === 'jpg' ? quality : undefined
+        );
+      });
+
+      const filename = `${document.name}.${format}`;
+
+      // If external upload handler is provided, use it
+      if (onImageUpload) {
+        const url = await onImageUpload(blob, filename);
+        setUploadedUrl(url);
+        setIsExporting(false);
+        return; // Don't close — show the URL
+      }
+
+      // Otherwise download locally
+      downloadBlob(blob, filename);
       onClose();
     } catch (error) {
       console.error('Export failed:', error);
     } finally {
       setIsExporting(false);
     }
-  }, [format, quality, dpi, canvasRef, document, onClose]);
+  }, [format, quality, dpi, canvasRef, document, onClose, onImageUpload]);
 
   if (!isOpen) return null;
 
@@ -96,7 +109,7 @@ export function ExportDialog({ isOpen, onClose, canvasRef }: ExportDialogProps) 
             >
               <option value="png">PNG Image</option>
               <option value="jpg">JPG Image</option>
-              <option value="svg">SVG Vector</option>
+              <option value="svg">SVG (embedded raster)</option>
               <option value="json">JSON Document</option>
             </select>
           </div>
@@ -131,18 +144,37 @@ export function ExportDialog({ isOpen, onClose, canvasRef }: ExportDialogProps) 
               <span style={styles.qualityValue}>{Math.round(quality * 100)}%</span>
             </div>
           )}
+
+          {onImageUpload && (format === 'png' || format === 'jpg') && (
+            <div style={styles.infoBox}>
+              Export will upload to your server via the provided handler.
+            </div>
+          )}
+
+          {uploadedUrl && (
+            <div style={styles.field}>
+              <label style={styles.label}>Uploaded URL</label>
+              <input
+                type="text"
+                readOnly
+                value={uploadedUrl}
+                style={styles.urlInput}
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+            </div>
+          )}
         </div>
 
         <div style={styles.footer}>
           <button style={styles.cancelButton} onClick={onClose}>
-            Cancel
+            {uploadedUrl ? 'Done' : 'Cancel'}
           </button>
           <button
             style={styles.exportButton}
             onClick={handleExport}
             disabled={isExporting}
           >
-            {isExporting ? 'Exporting...' : 'Export'}
+            {isExporting ? 'Exporting...' : onImageUpload && (format === 'png' || format === 'jpg') ? 'Upload' : 'Export'}
           </button>
         </div>
       </div>
@@ -220,6 +252,28 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 4,
     display: 'block',
     textAlign: 'right' as const,
+  },
+  infoBox: {
+    padding: '10px 12px',
+    backgroundColor: 'rgba(137, 180, 250, 0.1)',
+    border: '1px solid rgba(137, 180, 250, 0.2)',
+    borderRadius: 8,
+    color: '#89b4fa',
+    fontSize: 12,
+    lineHeight: 1.4,
+    marginBottom: 16,
+  },
+  urlInput: {
+    width: '100%',
+    height: 36,
+    border: '1px solid #45475a',
+    borderRadius: 6,
+    backgroundColor: '#313244',
+    color: '#50C878',
+    fontSize: 12,
+    padding: '0 8px',
+    boxSizing: 'border-box' as const,
+    fontFamily: 'monospace',
   },
   footer: {
     display: 'flex',

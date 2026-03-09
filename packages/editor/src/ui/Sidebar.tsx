@@ -1,188 +1,182 @@
 import React from 'react';
-import { usePages, useElements, useSelection, useEditorStore } from '@reactcanvas/react';
-import { createPage } from '@reactcanvas/core';
+import { usePages, useElements, useSelection } from '@reactcanvas/react';
 
 export function Sidebar() {
   const { pages, activePageId, setActivePage, addPage, removePage, duplicatePage } = usePages();
   const { elements } = useElements();
-  const { selectedElementIds, select, deselectAll } = useSelection();
+  const { selectedElementIds, select } = useSelection();
 
   return (
-    <div style={styles.sidebar}>
-      {/* Pages section */}
-      <div style={styles.sectionHeader}>
-        <span style={styles.sectionTitle}>Pages</span>
-        <button
-          style={styles.addButton}
-          onClick={() => addPage({ name: `Page ${pages.length + 1}` })}
-          title="Add Page"
-        >
-          +
-        </button>
-      </div>
-
-      <div style={styles.pageList}>
-        {pages.map((page, index) => (
-          <div
-            key={page.id}
-            style={{
-              ...styles.pageItem,
-              ...(page.id === activePageId ? styles.pageItemActive : {}),
-            }}
-            onClick={() => setActivePage(page.id)}
+    <div style={styles.container}>
+      {/* Pages */}
+      <div style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <span style={styles.sectionLabel}>Pages</span>
+          <button
+            style={styles.addBtn}
+            onClick={() => addPage({ name: `Page ${pages.length + 1}` })}
+            title="Add Page"
           >
-            <div style={styles.pageThumbnail}>
-              <div
-                style={{
-                  ...styles.pageThumbnailInner,
-                  backgroundColor: page.backgroundColor,
-                }}
-              >
-                <span style={styles.pageNumber}>{index + 1}</span>
-              </div>
-            </div>
-            <div style={styles.pageInfo}>
-              <span style={styles.pageName}>{page.name}</span>
-              <span style={styles.pageDimensions}>
-                {page.width} x {page.height}
-              </span>
-            </div>
-            {pages.length > 1 && (
-              <div style={styles.pageActions}>
-                <button
-                  style={styles.smallButton}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    duplicatePage(page.id);
-                  }}
-                  title="Duplicate"
-                >
-                  &#10697;
-                </button>
-                <button
-                  style={styles.smallButton}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removePage(page.id);
-                  }}
-                  title="Delete"
-                >
-                  &#10005;
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Layers section */}
-      <div style={styles.sectionHeader}>
-        <span style={styles.sectionTitle}>Layers</span>
-      </div>
-
-      <div style={styles.layerList}>
-        {[...elements]
-          .sort((a, b) => b.layerOrder - a.layerOrder)
-          .map((element) => (
+            +
+          </button>
+        </div>
+        <div style={styles.list}>
+          {pages.map((page, index) => (
             <div
-              key={element.id}
+              key={page.id}
               style={{
-                ...styles.layerItem,
-                ...(selectedElementIds.includes(element.id) ? styles.layerItemActive : {}),
+                ...styles.pageItem,
+                ...(page.id === activePageId ? styles.pageItemActive : {}),
               }}
-              onClick={() => select(element.id)}
+              onClick={() => setActivePage(page.id)}
             >
-              <span style={styles.layerIcon}>
-                {element.type === 'shape' ? '&#9632;' : element.type === 'text' ? 'T' : '&#128247;'}
-              </span>
-              <span style={styles.layerName}>{element.name}</span>
-              {element.locked && <span style={styles.lockIcon}>&#128274;</span>}
-              {!element.visible && <span style={styles.lockIcon}>&#128065;</span>}
+              <div style={{ ...styles.thumb, backgroundColor: page.backgroundColor }}>
+                <span style={styles.thumbNum}>{index + 1}</span>
+              </div>
+              <div style={styles.pageInfo}>
+                <span style={styles.pageName}>{page.name}</span>
+                <span style={styles.pageDim}>{page.width} x {page.height}</span>
+              </div>
+              {pages.length > 1 && (
+                <div style={styles.actions}>
+                  <button
+                    style={styles.actionBtn}
+                    onClick={(e) => { e.stopPropagation(); duplicatePage(page.id); }}
+                    title="Duplicate"
+                  >{'\u2398'}</button>
+                  <button
+                    style={styles.actionBtn}
+                    onClick={(e) => { e.stopPropagation(); removePage(page.id); }}
+                    title="Delete"
+                  >{'\u2715'}</button>
+                </div>
+              )}
             </div>
           ))}
-        {elements.length === 0 && (
-          <div style={styles.emptyState}>No elements yet</div>
-        )}
+        </div>
+      </div>
+
+      {/* Layers */}
+      <div style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <span style={styles.sectionLabel}>Layers</span>
+        </div>
+        <div style={styles.layerList}>
+          {[...elements]
+            .sort((a, b) => b.layerOrder - a.layerOrder)
+            .map((element) => (
+              <div
+                key={element.id}
+                style={{
+                  ...styles.layerItem,
+                  ...(selectedElementIds.includes(element.id) ? styles.layerItemActive : {}),
+                }}
+                onClick={() => select(element.id)}
+              >
+                <span style={styles.layerIcon}>
+                  {getElementIcon(element.type)}
+                </span>
+                <span style={styles.layerName}>{element.name}</span>
+                {element.locked && <span style={styles.statusIcon}>{'\uD83D\uDD12'}</span>}
+                {!element.visible && <span style={styles.statusIcon}>{'\uD83D\uDC41'}</span>}
+              </div>
+            ))}
+          {elements.length === 0 && (
+            <div style={styles.empty}>No elements yet</div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
+function getElementIcon(type: string): string {
+  switch (type) {
+    case 'shape': return '\u25A0';
+    case 'text': return 'T';
+    case 'image': return '\uD83D\uDCF7';
+    case 'chart': return '\uD83D\uDCCA';
+    case 'kpi': return '#';
+    case 'table': return '\u2630';
+    case 'progress': return '\u25CB';
+    case 'embed': return '\uD83C\uDF10';
+    default: return '\u25A0';
+  }
+}
+
 const styles: Record<string, React.CSSProperties> = {
-  sidebar: {
-    width: 240,
-    backgroundColor: '#1e1e2e',
-    borderRight: '1px solid #313244',
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    overflow: 'hidden',
+  },
+  section: {
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
-    height: '100%',
   },
   sectionHeader: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '12px 16px 8px',
-    borderBottom: '1px solid #313244',
+    padding: '10px 14px 8px',
+    flexShrink: 0,
   },
-  sectionTitle: {
-    color: '#a6adc8',
-    fontSize: 11,
-    fontWeight: 600,
+  sectionLabel: {
+    color: '#585878',
+    fontSize: 10,
+    fontWeight: 700,
     textTransform: 'uppercase' as const,
-    letterSpacing: '0.5px',
+    letterSpacing: '1px',
   },
-  addButton: {
-    width: 24,
-    height: 24,
+  addBtn: {
+    width: 22,
+    height: 22,
     border: 'none',
-    borderRadius: 4,
-    backgroundColor: '#45475a',
-    color: '#cdd6f4',
+    borderRadius: 6,
+    backgroundColor: '#1e1e2e',
+    color: '#8888a8',
     cursor: 'pointer',
-    fontSize: 14,
+    fontSize: 13,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    transition: 'background-color 0.12s',
   },
-  pageList: {
+  list: {
     flex: '0 0 auto',
-    maxHeight: 300,
+    maxHeight: 280,
     overflow: 'auto',
-    padding: '8px',
+    padding: '0 10px 10px',
   },
   pageItem: {
     display: 'flex',
     alignItems: 'center',
-    gap: 8,
-    padding: '8px',
-    borderRadius: 6,
+    gap: 10,
+    padding: '8px 10px',
+    borderRadius: 8,
     cursor: 'pointer',
-    marginBottom: 4,
-    transition: 'background-color 0.15s',
+    marginBottom: 2,
+    transition: 'background-color 0.12s',
   },
   pageItemActive: {
-    backgroundColor: '#313244',
+    backgroundColor: '#1e1e2e',
   },
-  pageThumbnail: {
-    width: 48,
-    height: 36,
-    borderRadius: 4,
-    overflow: 'hidden',
-    border: '1px solid #45475a',
-    flexShrink: 0,
-  },
-  pageThumbnailInner: {
-    width: '100%',
-    height: '100%',
+  thumb: {
+    width: 44,
+    height: 32,
+    borderRadius: 6,
+    border: '1px solid #2a2a3a',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
-  pageNumber: {
-    color: '#6c7086',
-    fontSize: 12,
-    fontWeight: 600,
+  thumbNum: {
+    color: '#585878',
+    fontSize: 11,
+    fontWeight: 700,
   },
   pageInfo: {
     flex: 1,
@@ -191,70 +185,75 @@ const styles: Record<string, React.CSSProperties> = {
   pageName: {
     display: 'block',
     color: '#cdd6f4',
-    fontSize: 13,
+    fontSize: 12,
+    fontWeight: 500,
     whiteSpace: 'nowrap' as const,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
-  pageDimensions: {
+  pageDim: {
     display: 'block',
-    color: '#6c7086',
+    color: '#585878',
     fontSize: 10,
+    marginTop: 1,
   },
-  pageActions: {
+  actions: {
     display: 'flex',
     gap: 2,
   },
-  smallButton: {
+  actionBtn: {
     width: 22,
     height: 22,
     border: 'none',
-    borderRadius: 3,
+    borderRadius: 5,
     backgroundColor: 'transparent',
-    color: '#6c7086',
+    color: '#585878',
     cursor: 'pointer',
     fontSize: 11,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    transition: 'color 0.12s',
   },
   layerList: {
     flex: 1,
     overflow: 'auto',
-    padding: '8px',
+    padding: '0 10px 10px',
   },
   layerItem: {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
-    padding: '6px 8px',
-    borderRadius: 4,
+    padding: '6px 10px',
+    borderRadius: 6,
     cursor: 'pointer',
-    marginBottom: 2,
+    marginBottom: 1,
+    transition: 'background-color 0.12s',
   },
   layerItemActive: {
-    backgroundColor: '#313244',
+    backgroundColor: '#1e1e2e',
   },
   layerIcon: {
-    color: '#6c7086',
-    fontSize: 14,
-    width: 20,
+    color: '#585878',
+    fontSize: 13,
+    width: 18,
     textAlign: 'center' as const,
+    flexShrink: 0,
   },
   layerName: {
     flex: 1,
-    color: '#cdd6f4',
+    color: '#a0a0c0',
     fontSize: 12,
     whiteSpace: 'nowrap' as const,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
-  lockIcon: {
-    color: '#6c7086',
-    fontSize: 12,
+  statusIcon: {
+    color: '#585878',
+    fontSize: 11,
   },
-  emptyState: {
-    color: '#6c7086',
+  empty: {
+    color: '#585878',
     fontSize: 12,
     textAlign: 'center' as const,
     padding: '24px 0',

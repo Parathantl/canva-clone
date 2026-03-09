@@ -1,5 +1,7 @@
 import React, { memo, useCallback, useRef, useEffect } from 'react';
-import type { CanvasElement, ShapeElement, TextElement, ImageElement, SolidFill, LinearGradientFill } from '@reactcanvas/core';
+import DOMPurify from 'dompurify';
+import type { CanvasElement, ShapeElement, TextElement, ImageElement, ChartElement, KPIElement, TableElement, ProgressElement, EmbedElement, SolidFill, LinearGradientFill } from '@reactcanvas/core';
+import { ChartContent, KPIContent, TableContent, ProgressContent, EmbedContent } from './WidgetRenderers';
 
 interface DOMElementRendererProps {
   element: CanvasElement;
@@ -11,6 +13,7 @@ interface DOMElementRendererProps {
   onResizeStart: (id: string, handle: string, e: React.MouseEvent) => void;
   onRotateStart: (id: string, e: React.MouseEvent) => void;
   onDblClick: (id: string) => void;
+  onContextMenu?: (id: string, e: React.MouseEvent) => void;
   onAutoResize?: (id: string, height: number) => void;
   onTextContentChange?: (id: string, content: string) => void;
   onTextEditComplete?: () => void;
@@ -30,6 +33,14 @@ const HANDLES = [
   { pos: 'br', x: 1, y: 1, cursor: 'nwse-resize' },
 ];
 
+function buildTransform(el: CanvasElement): string | undefined {
+  const parts: string[] = [];
+  if (el.rotation) parts.push(`rotate(${el.rotation}deg)`);
+  if (el.flipX) parts.push('scaleX(-1)');
+  if (el.flipY) parts.push('scaleY(-1)');
+  return parts.length > 0 ? parts.join(' ') : undefined;
+}
+
 export const DOMElementRenderer = memo(function DOMElementRenderer({
   element,
   isSelected,
@@ -40,6 +51,7 @@ export const DOMElementRenderer = memo(function DOMElementRenderer({
   onResizeStart,
   onRotateStart,
   onDblClick,
+  onContextMenu,
   onAutoResize,
   onTextContentChange,
   onTextEditComplete,
@@ -83,6 +95,20 @@ export const DOMElementRenderer = memo(function DOMElementRenderer({
     e.preventDefault();
   }, []);
 
+  const handleRightClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (!onContextMenu) return;
+      e.preventDefault();
+      e.stopPropagation();
+      // Auto-select the element on right-click
+      if (!isSelected) {
+        onSelect(element.id, false);
+      }
+      onContextMenu(element.id, e);
+    },
+    [element.id, isSelected, onSelect, onContextMenu]
+  );
+
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -108,7 +134,7 @@ export const DOMElementRenderer = memo(function DOMElementRenderer({
         width: element.width,
         height: isText ? 'auto' : element.height,
         minHeight: isText ? 20 : undefined,
-        transform: element.rotation ? `rotate(${element.rotation}deg)` : undefined,
+        transform: buildTransform(element),
         opacity: element.opacity,
         cursor: isEditing ? 'text' : element.locked ? 'default' : 'move',
         pointerEvents: element.locked ? 'none' : 'auto',
@@ -118,6 +144,7 @@ export const DOMElementRenderer = memo(function DOMElementRenderer({
       }}
       onMouseDown={handleMouseDown}
       onDoubleClick={handleDoubleClick}
+      onContextMenu={handleRightClick}
       onDragStart={preventNativeDrag}
     >
       {/* Render the visual content */}
@@ -207,6 +234,28 @@ const ElementContent = memo(function ElementContent({ element }: { element: Canv
       return <ShapeContent element={element as ShapeElement} />;
     case 'image':
       return <ImageContent element={element as ImageElement} />;
+    case 'chart':
+      return <ChartContent element={element as ChartElement} />;
+    case 'kpi':
+      return <KPIContent element={element as KPIElement} />;
+    case 'table':
+      return <TableContent element={element as TableElement} />;
+    case 'progress':
+      return <ProgressContent element={element as ProgressElement} />;
+    case 'embed':
+      return <EmbedContent element={element as EmbedElement} />;
+    case 'group':
+      return (
+        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            border: '1px dashed rgba(137, 180, 250, 0.3)',
+            borderRadius: 4,
+            pointerEvents: 'none',
+          }} />
+        </div>
+      );
     default:
       return null;
   }
@@ -227,15 +276,17 @@ function TextContent({
   const fillColor = element.fill.type === 'solid' ? (element.fill as SolidFill).color : '#000000';
   const hasHtml = /<[a-z][\s\S]*>/i.test(element.content);
 
-  // Focus and select all when entering edit mode
+  // Focus when entering edit mode — place cursor at end instead of selecting all
   useEffect(() => {
     if (!isEditing || !editorRef.current) return;
     const el = editorRef.current;
     // Set initial HTML content
     el.innerHTML = element.content;
     el.focus();
+    // Place cursor at end of content (not select all)
     const range = document.createRange();
     range.selectNodeContents(el);
+    range.collapse(false); // collapse to end
     const sel = window.getSelection();
     sel?.removeAllRanges();
     sel?.addRange(range);
@@ -318,11 +369,12 @@ function TextContent({
   }
 
   // Display mode: render content (may contain HTML from inline formatting)
+  // Sanitize HTML to prevent XSS attacks
   return (
     <div
       style={{ ...baseStyle, userSelect: 'none' }}
       {...(hasHtml
-        ? { dangerouslySetInnerHTML: { __html: element.content } }
+        ? { dangerouslySetInnerHTML: { __html: DOMPurify.sanitize(element.content) } }
         : { children: element.content }
       )}
     />
@@ -465,7 +517,7 @@ function ImageContent({ element }: { element: ImageElement }) {
       style={{
         width: '100%',
         height: '100%',
-        objectFit: 'cover',
+        objectFit: 'fill',
         filter: filterParts.length > 0 ? filterParts.join(' ') : undefined,
         display: 'block',
         userSelect: 'none',

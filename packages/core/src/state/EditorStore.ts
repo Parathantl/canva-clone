@@ -1,6 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 import { immer } from 'zustand/middleware/immer';
-import type { Document, Page, CanvasElement } from '../types/document';
+import type { Document, Page, CanvasElement, GroupElement } from '../types/document';
 import { createDefaultDocument, createId } from '../factories/DocumentFactory';
 
 export interface ViewportState {
@@ -44,6 +44,12 @@ export interface EditorState {
   updateElements: (updates: Array<{ id: string; changes: Partial<CanvasElement> }>) => void;
   duplicateElements: (elementIds: string[]) => string[];
   reorderElement: (elementId: string, newOrder: number) => void;
+  bringToFront: (elementIds: string[]) => void;
+  sendToBack: (elementIds: string[]) => void;
+  bringForward: (elementIds: string[]) => void;
+  sendBackward: (elementIds: string[]) => void;
+  groupElements: (elementIds: string[]) => string;
+  ungroupElement: (groupId: string) => void;
 
   // Selection actions
   selectElement: (elementId: string, addToSelection?: boolean) => void;
@@ -65,6 +71,33 @@ export interface EditorState {
   getActivePage: () => Page | undefined;
   getElement: (elementId: string) => CanvasElement | undefined;
   getSelectedElements: () => CanvasElement[];
+}
+
+/** Shared helper: shift selected elements one step forward or backward in layer order */
+function shiftLayerOrder(
+  elements: CanvasElement[],
+  elementIds: string[],
+  direction: 'forward' | 'backward',
+) {
+  const idSet = new Set(elementIds);
+  const sorted = [...elements].sort((a, b) => a.layerOrder - b.layerOrder);
+  const isForward = direction === 'forward';
+  const start = isForward ? sorted.length - 1 : 0;
+  const end = isForward ? -1 : sorted.length;
+  const step = isForward ? -1 : 1;
+  const neighborStep = isForward ? 1 : -1;
+
+  for (let i = start; i !== end; i += step) {
+    if (!idSet.has(sorted[i].id)) continue;
+    for (let j = i + neighborStep; j >= 0 && j < sorted.length; j += neighborStep) {
+      if (!idSet.has(sorted[j].id)) {
+        const tmp = sorted[i].layerOrder;
+        sorted[i].layerOrder = sorted[j].layerOrder;
+        sorted[j].layerOrder = tmp;
+        break;
+      }
+    }
+  }
 }
 
 export const createEditorStore = (initialDocument?: Document) => {
@@ -245,6 +278,126 @@ export const createEditorStore = (initialDocument?: Document) => {
               state.document.updatedAt = new Date().toISOString();
             }
           }
+        }),
+
+      bringToFront: (elementIds) =>
+        set((state) => {
+          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          if (!page) return;
+          const maxOrder = Math.max(...page.elements.map((el) => el.layerOrder));
+          const idSet = new Set(elementIds);
+          let nextOrder = maxOrder + 1;
+          for (const el of page.elements) {
+            if (idSet.has(el.id)) {
+              el.layerOrder = nextOrder++;
+            }
+          }
+          state.document.updatedAt = new Date().toISOString();
+        }),
+
+      sendToBack: (elementIds) =>
+        set((state) => {
+          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          if (!page) return;
+          const minOrder = Math.min(...page.elements.map((el) => el.layerOrder));
+          const idSet = new Set(elementIds);
+          let nextOrder = minOrder - elementIds.length;
+          for (const el of page.elements) {
+            if (idSet.has(el.id)) {
+              el.layerOrder = nextOrder++;
+            }
+          }
+          state.document.updatedAt = new Date().toISOString();
+        }),
+
+      bringForward: (elementIds) =>
+        set((state) => {
+          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          if (!page) return;
+          shiftLayerOrder(page.elements, elementIds, 'forward');
+          state.document.updatedAt = new Date().toISOString();
+        }),
+
+      sendBackward: (elementIds) =>
+        set((state) => {
+          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          if (!page) return;
+          shiftLayerOrder(page.elements, elementIds, 'backward');
+          state.document.updatedAt = new Date().toISOString();
+        }),
+
+      groupElements: (elementIds) => {
+        const groupId = createId();
+        set((state) => {
+          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          if (!page || elementIds.length < 2) return;
+
+          const children = page.elements.filter((el) => elementIds.includes(el.id));
+          if (children.length < 2) return;
+
+          // Calculate bounding box
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          for (const c of children) {
+            minX = Math.min(minX, c.x);
+            minY = Math.min(minY, c.y);
+            maxX = Math.max(maxX, c.x + c.width);
+            maxY = Math.max(maxY, c.y + c.height);
+          }
+
+          const maxOrder = Math.max(...children.map((c) => c.layerOrder));
+
+          const group: CanvasElement = {
+            id: groupId,
+            type: 'group',
+            name: 'Group',
+            x: minX,
+            y: minY,
+            width: maxX - minX,
+            height: maxY - minY,
+            rotation: 0,
+            opacity: 1,
+            locked: false,
+            visible: true,
+            layerOrder: maxOrder,
+            children: elementIds,
+          } as CanvasElement;
+
+          // Adjust child positions to be relative to group
+          for (const c of children) {
+            c.x -= minX;
+            c.y -= minY;
+          }
+
+          page.elements.push(group);
+          state.selectedElementIds = [groupId];
+          state.document.updatedAt = new Date().toISOString();
+        });
+        return groupId;
+      },
+
+      ungroupElement: (groupId) =>
+        set((state) => {
+          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          if (!page) return;
+
+          const group = page.elements.find((el) => el.id === groupId);
+          if (!group || group.type !== 'group') return;
+
+          const childIds = (group as GroupElement).children;
+
+          // Restore child positions to absolute
+          for (const childId of childIds) {
+            const child = page.elements.find((el) => el.id === childId);
+            if (child) {
+              child.x += group.x;
+              child.y += group.y;
+            }
+          }
+
+          // Remove group element
+          page.elements = page.elements.filter((el) => el.id !== groupId);
+          state.selectedElementIds = childIds;
+          state.document.updatedAt = new Date().toISOString();
         }),
 
       // Selection actions

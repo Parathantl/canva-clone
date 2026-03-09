@@ -7,6 +7,11 @@ import type {
   ImageElement,
   FramedImageElement,
   LineElement,
+  ChartElement,
+  KPIElement,
+  TableElement,
+  ProgressElement,
+  EmbedElement,
   Fill,
   Stroke,
   ImageFilters,
@@ -164,6 +169,159 @@ export function createFramedImageElement(overrides: Partial<FramedImageElement> 
     imageOriginalHeight: 0,
     fitMode: 'cover',
     filters: createDefaultImageFilters(),
+    ...overrides,
+  };
+}
+
+export const DEFAULT_CHART_COLORS = [
+  '#4A90D9', '#E8596D', '#50C878', '#FFB347', '#9B72CF',
+  '#FF6B9D', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD',
+];
+
+export function createChartElement(overrides: Partial<ChartElement> = {}): ChartElement {
+  return {
+    id: createId(),
+    type: 'chart',
+    name: 'Chart',
+    x: 100,
+    y: 100,
+    width: 480,
+    height: 320,
+    rotation: 0,
+    opacity: 1,
+    locked: false,
+    visible: true,
+    layerOrder: 0,
+    chartType: 'bar',
+    data: [
+      { label: 'Q1', value: 65 },
+      { label: 'Q2', value: 85 },
+      { label: 'Q3', value: 45 },
+      { label: 'Q4', value: 95 },
+    ],
+    title: 'Revenue by Quarter',
+    showLegend: false,
+    showLabels: true,
+    showGrid: true,
+    colors: DEFAULT_CHART_COLORS,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    ...overrides,
+  };
+}
+
+export function createKPIElement(overrides: Partial<KPIElement> = {}): KPIElement {
+  return {
+    id: createId(),
+    type: 'kpi',
+    name: 'KPI Card',
+    x: 100,
+    y: 100,
+    width: 260,
+    height: 140,
+    rotation: 0,
+    opacity: 1,
+    locked: false,
+    visible: true,
+    layerOrder: 0,
+    value: '12,450',
+    label: 'Total Revenue',
+    prefix: '$',
+    suffix: '',
+    trend: 'up',
+    trendValue: '+12.5%',
+    backgroundColor: '#ffffff',
+    valueColor: '#1e1e2e',
+    labelColor: '#6c7086',
+    trendColor: '#50C878',
+    borderRadius: 12,
+    icon: '',
+    ...overrides,
+  };
+}
+
+export function createTableElement(overrides: Partial<TableElement> = {}): TableElement {
+  return {
+    id: createId(),
+    type: 'table',
+    name: 'Table',
+    x: 100,
+    y: 100,
+    width: 520,
+    height: 240,
+    rotation: 0,
+    opacity: 1,
+    locked: false,
+    visible: true,
+    layerOrder: 0,
+    headers: ['Name', 'Status', 'Value', 'Change'],
+    rows: [
+      ['Project Alpha', 'Active', '$24,500', '+15%'],
+      ['Project Beta', 'Pending', '$18,200', '+8%'],
+      ['Project Gamma', 'Active', '$31,000', '+22%'],
+      ['Project Delta', 'Paused', '$12,800', '-3%'],
+    ],
+    headerBg: '#1e1e2e',
+    headerColor: '#ffffff',
+    rowBg: '#ffffff',
+    altRowBg: '#f8f9fa',
+    cellColor: '#333333',
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    fontSize: 13,
+    ...overrides,
+  };
+}
+
+export function createProgressElement(overrides: Partial<ProgressElement> = {}): ProgressElement {
+  return {
+    id: createId(),
+    type: 'progress',
+    name: 'Progress',
+    x: 100,
+    y: 100,
+    width: 260,
+    height: 140,
+    rotation: 0,
+    opacity: 1,
+    locked: false,
+    visible: true,
+    layerOrder: 0,
+    progressStyle: 'bar',
+    value: 72,
+    maxValue: 100,
+    label: 'Completion',
+    showValue: true,
+    trackColor: '#e5e7eb',
+    fillColor: '#4A90D9',
+    valueColor: '#1e1e2e',
+    labelColor: '#6c7086',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    thickness: 12,
+    ...overrides,
+  };
+}
+
+export function createEmbedElement(overrides: Partial<EmbedElement> = {}): EmbedElement {
+  return {
+    id: createId(),
+    type: 'embed',
+    name: 'Embed',
+    x: 100,
+    y: 100,
+    width: 480,
+    height: 320,
+    rotation: 0,
+    opacity: 1,
+    locked: false,
+    visible: true,
+    layerOrder: 0,
+    embedType: 'website',
+    url: '',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 12,
+    showBorder: true,
     ...overrides,
   };
 }

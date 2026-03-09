@@ -1,6 +1,7 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import type { CanvasElement } from '@reactcanvas/core';
-import { useEditorInstance, useEditorStore } from '../context/EditorContext';
+import { useEditorInstance } from '../context/EditorContext';
+import { useActivePage } from './useActivePage';
 
 /** Creates a stable callback that delegates to a store method */
 function useStoreAction<T extends (...args: any[]) => any>(
@@ -16,13 +17,9 @@ function useStoreAction<T extends (...args: any[]) => any>(
 
 export function useElements() {
   const { store, eventBus } = useEditorInstance();
-  const activePageId = useEditorStore((s) => s.activePageId);
-  const pages = useEditorStore((s) => s.document.pages);
+  const activePage = useActivePage();
 
-  const elements = useMemo(() => {
-    const page = pages.find((p) => p.id === activePageId);
-    return page?.elements ?? [];
-  }, [pages, activePageId]);
+  const elements = activePage?.elements ?? [];
 
   // Methods that emit events need custom wrappers
   const addElement = useCallback(
@@ -36,10 +33,9 @@ export function useElements() {
   const removeElement = useCallback(
     (elementId: string) => {
       const element = store.getState().getElement(elementId);
+      if (!element) return;
       store.getState().removeElement(elementId);
-      if (element) {
-        eventBus.emit('element:remove', { element });
-      }
+      eventBus.emit('element:remove', { element });
     },
     [store, eventBus]
   );

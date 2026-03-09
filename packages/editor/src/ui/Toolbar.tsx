@@ -9,8 +9,8 @@ import {
 import {
   createShapeElement,
   createTextElement,
-  createImageElement,
 } from '@reactcanvas/core';
+import { processImageFile } from '../utils/imageUpload';
 
 export function Toolbar({ onExport, onPresent, onShortcuts }: { onExport?: () => void; onPresent?: () => void; onShortcuts?: () => void }) {
   const { selectedElementIds } = useSelection();
@@ -133,29 +133,12 @@ function ImageUploadButton() {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const src = ev.target?.result as string;
-        const img = new Image();
-        img.onload = () => {
-          const maxDim = 600;
-          let w = img.naturalWidth, h = img.naturalHeight;
-          if (w > maxDim || h > maxDim) {
-            const ratio = Math.min(maxDim / w, maxDim / h);
-            w *= ratio; h *= ratio;
-          }
-          const cx = (activePage?.width ?? 1920) / 2;
-          const cy = (activePage?.height ?? 1080) / 2;
-          addElement(createImageElement({
-            src, x: cx - w / 2, y: cy - h / 2, width: w, height: h,
-            originalWidth: img.naturalWidth, originalHeight: img.naturalHeight,
-            cropWidth: img.naturalWidth, cropHeight: img.naturalHeight,
-            layerOrder: elements.length, name: file.name,
-          }));
-        };
-        img.src = src;
-      };
-      reader.readAsDataURL(file);
+      const cx = (activePage?.width ?? 1920) / 2;
+      const cy = (activePage?.height ?? 1080) / 2;
+      processImageFile(
+        { file, x: cx, y: cy, layerOrder: elements.length },
+        (el) => addElement(el),
+      );
       if (fileInputRef.current) fileInputRef.current.value = '';
     },
     [addElement, elements.length, activePage]

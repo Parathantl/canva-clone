@@ -1,7 +1,8 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import type { Page } from '@reactcanvas/core';
 import { createPage } from '@reactcanvas/core';
 import { useEditorInstance, useEditorStore } from '../context/EditorContext';
+import { useActivePage } from './useActivePage';
 
 export function usePages() {
   const { store, eventBus } = useEditorInstance();
@@ -9,10 +10,7 @@ export function usePages() {
   const pages = useEditorStore((s) => s.document.pages);
   const activePageId = useEditorStore((s) => s.activePageId);
 
-  const activePage = useMemo(
-    () => pages.find((p) => p.id === activePageId),
-    [pages, activePageId]
-  );
+  const activePage = useActivePage();
 
   const addPage = useCallback(
     (overrides?: Partial<Page>) => {

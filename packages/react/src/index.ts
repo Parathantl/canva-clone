@@ -5,6 +5,7 @@ export type { EditorProviderProps, EditorInstance } from './context/EditorContex
 // Hooks
 export { useEditor } from './hooks/useEditor';
 export { useSelection } from './hooks/useSelection';
+export { useActivePage } from './hooks/useActivePage';
 export { useElements } from './hooks/useElements';
 export { usePages } from './hooks/usePages';
 export { useViewport } from './hooks/useViewport';

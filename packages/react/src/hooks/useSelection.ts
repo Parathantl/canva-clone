@@ -1,19 +1,17 @@
 import { useCallback, useMemo } from 'react';
-import type { CanvasElement } from '@reactcanvas/core';
 import { useEditorInstance, useEditorStore } from '../context/EditorContext';
+import { useActivePage } from './useActivePage';
 
 export function useSelection() {
   const { store } = useEditorInstance();
   const selectedElementIds = useEditorStore((s) => s.selectedElementIds);
-  const activePageId = useEditorStore((s) => s.activePageId);
-  const pages = useEditorStore((s) => s.document.pages);
+  const activePage = useActivePage();
 
   const selectedElements = useMemo(() => {
-    const page = pages.find((p) => p.id === activePageId);
-    if (!page) return [];
+    if (!activePage) return [];
     const idSet = new Set(selectedElementIds);
-    return page.elements.filter((el) => idSet.has(el.id));
-  }, [pages, activePageId, selectedElementIds]);
+    return activePage.elements.filter((el) => idSet.has(el.id));
+  }, [activePage, selectedElementIds]);
 
   const select = useCallback(
     (elementId: string, addToSelection = false) => {

@@ -305,8 +305,12 @@ function NumberInput({
       type="number"
       value={value}
       onChange={(e) => {
-        const v = parseFloat(e.target.value);
-        if (!isNaN(v)) onChange(v);
+        let v = parseFloat(e.target.value);
+        if (!isNaN(v)) {
+          if (min !== undefined) v = Math.max(min, v);
+          if (max !== undefined) v = Math.min(max, v);
+          onChange(v);
+        }
       }}
       min={min}
       max={max}

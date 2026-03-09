@@ -102,18 +102,24 @@ export function EditorProvider({
     eventBus.on('history:undo', () => {
       const doc = historyManager.undo();
       if (doc) {
-        historyManager.pause();
-        store.getState().setDocument(doc);
-        historyManager.resume();
+        try {
+          historyManager.pause();
+          store.getState().setDocument(doc);
+        } finally {
+          historyManager.resume();
+        }
       }
     });
 
     eventBus.on('history:redo', () => {
       const doc = historyManager.redo();
       if (doc) {
-        historyManager.pause();
-        store.getState().setDocument(doc);
-        historyManager.resume();
+        try {
+          historyManager.pause();
+          store.getState().setDocument(doc);
+        } finally {
+          historyManager.resume();
+        }
       }
     });
 

@@ -103,6 +103,11 @@ function shiftLayerOrder(
 export const createEditorStore = (initialDocument?: Document) => {
   const doc = initialDocument ?? createDefaultDocument();
 
+  /** Helper: find the active page inside an immer draft */
+  function activePage(state: EditorState): Page | undefined {
+    return state.document.pages.find((p) => p.id === state.activePageId);
+  }
+
   return createStore<EditorState>()(
     immer((set, get) => ({
       document: doc,
@@ -189,7 +194,7 @@ export const createEditorStore = (initialDocument?: Document) => {
       // Element actions
       addElement: (element) =>
         set((state) => {
-          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          const page = activePage(state);
           if (page) {
             page.elements.push(element);
             state.document.updatedAt = new Date().toISOString();
@@ -198,7 +203,7 @@ export const createEditorStore = (initialDocument?: Document) => {
 
       removeElement: (elementId) =>
         set((state) => {
-          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          const page = activePage(state);
           if (page) {
             page.elements = page.elements.filter((el) => el.id !== elementId);
             state.selectedElementIds = state.selectedElementIds.filter((id) => id !== elementId);
@@ -208,7 +213,7 @@ export const createEditorStore = (initialDocument?: Document) => {
 
       removeElements: (elementIds) =>
         set((state) => {
-          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          const page = activePage(state);
           if (page) {
             const idSet = new Set(elementIds);
             page.elements = page.elements.filter((el) => !idSet.has(el.id));
@@ -219,7 +224,7 @@ export const createEditorStore = (initialDocument?: Document) => {
 
       updateElement: (elementId, updates) =>
         set((state) => {
-          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          const page = activePage(state);
           if (page) {
             const element = page.elements.find((el) => el.id === elementId);
             if (element) {
@@ -231,7 +236,7 @@ export const createEditorStore = (initialDocument?: Document) => {
 
       updateElements: (updates) =>
         set((state) => {
-          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          const page = activePage(state);
           if (page) {
             for (const { id, changes } of updates) {
               const element = page.elements.find((el) => el.id === id);
@@ -246,7 +251,7 @@ export const createEditorStore = (initialDocument?: Document) => {
       duplicateElements: (elementIds) => {
         const newIds: string[] = [];
         set((state) => {
-          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          const page = activePage(state);
           if (page) {
             for (const id of elementIds) {
               const element = page.elements.find((el) => el.id === id);
@@ -270,7 +275,7 @@ export const createEditorStore = (initialDocument?: Document) => {
 
       reorderElement: (elementId, newOrder) =>
         set((state) => {
-          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          const page = activePage(state);
           if (page) {
             const element = page.elements.find((el) => el.id === elementId);
             if (element) {
@@ -282,7 +287,7 @@ export const createEditorStore = (initialDocument?: Document) => {
 
       bringToFront: (elementIds) =>
         set((state) => {
-          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          const page = activePage(state);
           if (!page) return;
           const maxOrder = Math.max(...page.elements.map((el) => el.layerOrder));
           const idSet = new Set(elementIds);
@@ -297,7 +302,7 @@ export const createEditorStore = (initialDocument?: Document) => {
 
       sendToBack: (elementIds) =>
         set((state) => {
-          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          const page = activePage(state);
           if (!page) return;
           const minOrder = Math.min(...page.elements.map((el) => el.layerOrder));
           const idSet = new Set(elementIds);
@@ -312,7 +317,7 @@ export const createEditorStore = (initialDocument?: Document) => {
 
       bringForward: (elementIds) =>
         set((state) => {
-          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          const page = activePage(state);
           if (!page) return;
           shiftLayerOrder(page.elements, elementIds, 'forward');
           state.document.updatedAt = new Date().toISOString();
@@ -320,7 +325,7 @@ export const createEditorStore = (initialDocument?: Document) => {
 
       sendBackward: (elementIds) =>
         set((state) => {
-          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          const page = activePage(state);
           if (!page) return;
           shiftLayerOrder(page.elements, elementIds, 'backward');
           state.document.updatedAt = new Date().toISOString();
@@ -329,7 +334,7 @@ export const createEditorStore = (initialDocument?: Document) => {
       groupElements: (elementIds) => {
         const groupId = createId();
         set((state) => {
-          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          const page = activePage(state);
           if (!page || elementIds.length < 2) return;
 
           const children = page.elements.filter((el) => elementIds.includes(el.id));
@@ -346,7 +351,7 @@ export const createEditorStore = (initialDocument?: Document) => {
 
           const maxOrder = Math.max(...children.map((c) => c.layerOrder));
 
-          const group: CanvasElement = {
+          const group: GroupElement = {
             id: groupId,
             type: 'group',
             name: 'Group',
@@ -360,7 +365,7 @@ export const createEditorStore = (initialDocument?: Document) => {
             visible: true,
             layerOrder: maxOrder,
             children: elementIds,
-          } as CanvasElement;
+          };
 
           // Adjust child positions to be relative to group
           for (const c of children) {
@@ -377,7 +382,7 @@ export const createEditorStore = (initialDocument?: Document) => {
 
       ungroupElement: (groupId) =>
         set((state) => {
-          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          const page = activePage(state);
           if (!page) return;
 
           const group = page.elements.find((el) => el.id === groupId);
@@ -403,7 +408,7 @@ export const createEditorStore = (initialDocument?: Document) => {
       // Selection actions
       selectElement: (elementId, addToSelection = false) =>
         set((state) => {
-          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          const page = activePage(state);
           const element = page?.elements.find((el) => el.id === elementId);
           if (!element || element.locked) return;
 
@@ -433,7 +438,7 @@ export const createEditorStore = (initialDocument?: Document) => {
 
       selectAll: () =>
         set((state) => {
-          const page = state.document.pages.find((p) => p.id === state.activePageId);
+          const page = activePage(state);
           if (page) {
             state.selectedElementIds = page.elements.filter((el) => !el.locked).map((el) => el.id);
           }
@@ -470,18 +475,18 @@ export const createEditorStore = (initialDocument?: Document) => {
       // Helpers
       getActivePage: () => {
         const state = get();
-        return state.document.pages.find((p) => p.id === state.activePageId);
+        return activePage(state);
       },
 
       getElement: (elementId) => {
         const state = get();
-        const page = state.document.pages.find((p) => p.id === state.activePageId);
+        const page = activePage(state);
         return page?.elements.find((el) => el.id === elementId);
       },
 
       getSelectedElements: () => {
         const state = get();
-        const page = state.document.pages.find((p) => p.id === state.activePageId);
+        const page = activePage(state);
         if (!page) return [];
         const idSet = new Set(state.selectedElementIds);
         return page.elements.filter((el) => idSet.has(el.id));

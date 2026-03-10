@@ -7,6 +7,14 @@ const PRESET_COLORS = [
   '#3f3f46', '#27272a', '#18181b', '#000000', 'transparent',
 ];
 
+const MAX_RECENT = 8;
+let recentColors: string[] = [];
+
+function addRecentColor(color: string) {
+  if (color === 'transparent' || !color) return;
+  recentColors = [color, ...recentColors.filter((c) => c.toLowerCase() !== color.toLowerCase())].slice(0, MAX_RECENT);
+}
+
 export function ColorPicker({
   color,
   onChange,
@@ -18,9 +26,16 @@ export function ColorPicker({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [hexInput, setHexInput] = useState(color);
+  const [, setTick] = useState(0);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => setHexInput(color), [color]);
+
+  const handleColorChange = useCallback((c: string) => {
+    onChange(c);
+    addRecentColor(c);
+    setTick((t) => t + 1); // Force re-render so other pickers see the new color
+  }, [onChange]);
 
   // Close on outside click
   useEffect(() => {
@@ -37,14 +52,14 @@ export function ColorPicker({
   const handleHexChange = useCallback((val: string) => {
     setHexInput(val);
     if (/^#[0-9a-fA-F]{6}$/.test(val) || val === 'transparent') {
-      onChange(val);
+      handleColorChange(val);
     }
-  }, [onChange]);
+  }, [handleColorChange]);
 
   const handleNativeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange(e.target.value);
+    handleColorChange(e.target.value);
     setHexInput(e.target.value);
-  }, [onChange]);
+  }, [handleColorChange]);
 
   return (
     <div ref={pickerRef} style={{ position: 'relative' }}>
@@ -84,13 +99,53 @@ export function ColorPicker({
               style={styles.nativeInput}
             />
             <span style={styles.nativeLabel}>Custom color</span>
+            {'EyeDropper' in window && (
+              <button
+                onClick={async () => {
+                  try {
+                    const eyeDropper = new (window as any).EyeDropper();
+                    const result = await eyeDropper.open();
+                    handleColorChange(result.sRGBHex);
+                    setHexInput(result.sRGBHex);
+                  } catch {
+                    // User cancelled
+                  }
+                }}
+                style={styles.eyedropperBtn}
+                title="Pick color from screen"
+              >
+                {'\uD83D\uDCA7'}
+              </button>
+            )}
           </div>
+          {/* Recent colors */}
+          {recentColors.length > 0 && (
+            <>
+              <div style={styles.sectionLabel}>Recent</div>
+              <div style={{ ...styles.grid, marginBottom: 8 }}>
+                {recentColors.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => { handleColorChange(c); setHexInput(c); setIsOpen(false); }}
+                    title={c}
+                    style={{
+                      ...styles.gridSwatch,
+                      backgroundColor: c,
+                      outline: color.toLowerCase() === c.toLowerCase() ? '2px solid #89b4fa' : 'none',
+                      outlineOffset: 1,
+                    }}
+                  />
+                ))}
+              </div>
+            </>
+          )}
           {/* Preset swatches */}
+          <div style={styles.sectionLabel}>Presets</div>
           <div style={styles.grid}>
             {PRESET_COLORS.map((c) => (
               <button
                 key={c}
-                onClick={() => { onChange(c); setHexInput(c); setIsOpen(false); }}
+                onClick={() => { handleColorChange(c); setHexInput(c); setIsOpen(false); }}
                 title={c}
                 style={{
                   ...styles.gridSwatch,
@@ -185,6 +240,29 @@ const styles: Record<string, React.CSSProperties> = {
   nativeLabel: {
     color: '#8888a8',
     fontSize: 11,
+  },
+  eyedropperBtn: {
+    width: 24,
+    height: 24,
+    border: '1px solid #2a2a3a',
+    borderRadius: 6,
+    backgroundColor: '#1e1e2e',
+    color: '#8888a8',
+    fontSize: 12,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
+    marginLeft: 'auto',
+  },
+  sectionLabel: {
+    color: '#585878',
+    fontSize: 9,
+    fontWeight: 700,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px',
+    marginBottom: 4,
   },
   grid: {
     display: 'grid',

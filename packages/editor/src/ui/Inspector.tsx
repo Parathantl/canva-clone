@@ -9,6 +9,7 @@ const DEFAULT_SHADOW: Shadow = { color: 'rgba(0,0,0,0.3)', blur: 10, offsetX: 0,
 export function Inspector() {
   const { selectedElements, hasSelection, selectionCount } = useSelection();
   const { updateElement, updateElements } = useElements();
+  const { activePage } = usePages();
 
   if (!hasSelection) {
     return <PageInspector />;
@@ -63,6 +64,59 @@ export function Inspector() {
           />
         </PropertyRow>
       </PropertyGroup>
+
+      {activePage && (
+        <PropertyGroup label="Page Alignment">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            <PageAlignButton
+              label="Center H"
+              icon={'\u2503'}
+              onClick={() => updateElement(element.id, {
+                x: (activePage.width - element.width) / 2,
+              } as Partial<CanvasElement>)}
+            />
+            <PageAlignButton
+              label="Center V"
+              icon={'\u2501'}
+              onClick={() => updateElement(element.id, {
+                y: (activePage.height - element.height) / 2,
+              } as Partial<CanvasElement>)}
+            />
+            <PageAlignButton
+              label="Center"
+              icon={'\u29BE'}
+              onClick={() => updateElement(element.id, {
+                x: (activePage.width - element.width) / 2,
+                y: (activePage.height - element.height) / 2,
+              } as Partial<CanvasElement>)}
+            />
+            <PageAlignButton
+              label="Left"
+              icon={'\u258C'}
+              onClick={() => updateElement(element.id, { x: 0 } as Partial<CanvasElement>)}
+            />
+            <PageAlignButton
+              label="Right"
+              icon={'\u2590'}
+              onClick={() => updateElement(element.id, {
+                x: activePage.width - element.width,
+              } as Partial<CanvasElement>)}
+            />
+            <PageAlignButton
+              label="Top"
+              icon={'\u2580'}
+              onClick={() => updateElement(element.id, { y: 0 } as Partial<CanvasElement>)}
+            />
+            <PageAlignButton
+              label="Bottom"
+              icon={'\u2584'}
+              onClick={() => updateElement(element.id, {
+                y: activePage.height - element.height,
+              } as Partial<CanvasElement>)}
+            />
+          </div>
+        </PropertyGroup>
+      )}
 
       <PropertyGroup label="Appearance">
         <PropertyRow label="Opacity">
@@ -942,6 +996,19 @@ function ImageInspector({ element }: { element: ImageElement }) {
   );
 }
 
+function PageAlignButton({ label, icon, onClick }: { label: string; icon: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      style={styles.pageAlignBtn}
+    >
+      <span style={{ fontSize: 13 }}>{icon}</span>
+      <span style={{ fontSize: 9 }}>{label}</span>
+    </button>
+  );
+}
+
 const styles: Record<string, React.CSSProperties> = {
   inspector: {
     width: 280,
@@ -1051,6 +1118,21 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 500,
     minWidth: 30,
     textAlign: 'right' as const,
+  },
+  pageAlignBtn: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 52,
+    height: 38,
+    border: '1px solid #2a2a3a',
+    borderRadius: 6,
+    backgroundColor: '#1e1e2e',
+    color: '#8888a8',
+    cursor: 'pointer',
+    padding: 0,
+    gap: 1,
   },
   resetButton: {
     width: '100%',

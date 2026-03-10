@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useMemo, useState, useEffect } from 'react';
 import type { CanvasElement, TextElement } from '@reactcanvas/core';
+import { createTextElement } from '@reactcanvas/core';
 import {
   useSelection,
   useElements,
@@ -625,15 +626,30 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
     };
   }, [dragging, zoom, updateElement, offsetX, offsetY, sortedElements, selectMultiple, setPan]);
 
-  // Double-click text to edit in-place
+  // Double-click text to edit in-place, or shape to add text inside
   const handleDblClick = useCallback(
     (id: string) => {
       const el = elements.find((e) => e.id === id);
       if (el?.type === 'text') {
         setEditingTextId(id);
+      } else if (el?.type === 'shape') {
+        // Create a text element centered on the shape
+        const textEl = createTextElement({
+          x: el.x + 10,
+          y: el.y + el.height / 2 - 15,
+          width: el.width - 20,
+          layerOrder: elements.length,
+          name: 'Shape Text',
+        });
+        addElement(textEl);
+        // Select and start editing the new text element
+        setTimeout(() => {
+          select(textEl.id, false);
+          setEditingTextId(textEl.id);
+        }, 0);
       }
     },
-    [elements]
+    [elements, addElement, select]
   );
 
   // Auto-resize text element height when content grows

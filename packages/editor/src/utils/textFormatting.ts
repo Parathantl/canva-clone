@@ -3,7 +3,7 @@
 const TEXT_EDITOR_SELECTOR = '[data-text-editor]';
 
 /** Get the active text editor element */
-export function getEditorEl(): HTMLElement | null {
+function getEditorEl(): HTMLElement | null {
   return document.querySelector(TEXT_EDITOR_SELECTOR);
 }
 
@@ -18,7 +18,7 @@ export function hasEditorSelection(): boolean {
 }
 
 /** Notify the text editor that its content changed (so React state stays in sync) */
-export function notifyEditor(): void {
+function notifyEditor(): void {
   const editor = getEditorEl();
   if (editor) {
     editor.dispatchEvent(new Event('input', { bubbles: true }));

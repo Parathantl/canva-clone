@@ -13,6 +13,8 @@ import { Templates } from './ui/Templates';
 import { PresentationMode } from './ui/PresentationMode';
 import { ShortcutHelp } from './ui/ShortcutHelp';
 import { ErrorBoundary } from './ui/ErrorBoundary';
+import { AIChat } from './ui/AIChat';
+import type { AIChatMessage } from './ui/AIChat';
 import { useFontLoader } from './hooks/useFontLoader';
 
 export interface DesignEditorProps {
@@ -27,6 +29,8 @@ export interface DesignEditorProps {
   onAutoSave?: (document: Document) => void;
   /** Auto-save debounce interval in ms (default 2000) */
   autoSaveInterval?: number;
+  /** AI chat handler — when provided, shows the AI panel in the sidebar. Parent app handles the LLM call. */
+  onAISendMessage?: (message: string, history: AIChatMessage[]) => Promise<string>;
   showToolbar?: boolean;
   showSidebar?: boolean;
   showInspector?: boolean;
@@ -41,6 +45,7 @@ export function DesignEditor({
   height,
   onChange,
   onImageUpload,
+  onAISendMessage,
   onAutoSave,
   autoSaveInterval = 2000,
   showToolbar = true,
@@ -96,6 +101,7 @@ export function DesignEditor({
         showSidebar={showSidebar}
         showInspector={showInspector}
         onImageUpload={onImageUpload}
+        onAISendMessage={onAISendMessage}
         className={className}
         style={style}
       />
@@ -103,14 +109,15 @@ export function DesignEditor({
   );
 }
 
-type SidePanel = 'pages' | 'widgets' | 'templates' | null;
+type SidePanel = 'pages' | 'widgets' | 'templates' | 'ai' | null;
 
 // Icon rail items
-const RAIL_ITEMS: { id: SidePanel; icon: string; label: string }[] = [
+const BASE_railItems: { id: SidePanel; icon: string; label: string }[] = [
   { id: 'pages', icon: '\u25A3', label: 'Pages & Layers' },
   { id: 'widgets', icon: '\u2B1A', label: 'Widgets' },
   { id: 'templates', icon: '\u2B13', label: 'Templates' },
 ];
+const AI_RAIL_ITEM = { id: 'ai' as SidePanel, icon: '\u2728', label: 'AI' };
 
 function EditorInner({
   containerRef,
@@ -119,6 +126,7 @@ function EditorInner({
   showSidebar,
   showInspector,
   onImageUpload,
+  onAISendMessage,
   className,
   style,
 }: {
@@ -128,6 +136,7 @@ function EditorInner({
   showSidebar: boolean;
   showInspector: boolean;
   onImageUpload?: (blob: Blob, filename: string) => Promise<string>;
+  onAISendMessage?: (message: string, history: AIChatMessage[]) => Promise<string>;
   className?: string;
   style?: React.CSSProperties;
 }) {
@@ -177,6 +186,11 @@ function EditorInner({
       canvasHeight: containerSize.height - toolbarHeight - textToolbarHeight,
     };
   }, [showSidebar, activePanel, showInspector, showToolbar, containerSize, textToolbarHeight]);
+
+  const railItems = useMemo(
+    () => onAISendMessage ? [...BASE_railItems, AI_RAIL_ITEM] : BASE_railItems,
+    [onAISendMessage]
+  );
 
   const togglePanel = useCallback((panel: SidePanel) => {
     setActivePanel((prev) => (prev === panel ? null : panel));
@@ -232,7 +246,7 @@ function EditorInner({
         {/* Icon rail */}
         {showSidebar && (
           <div style={railStyles.rail}>
-            {RAIL_ITEMS.map((item) => (
+            {railItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => togglePanel(item.id)}
@@ -254,7 +268,7 @@ function EditorInner({
           <div style={railStyles.panel}>
             <div style={railStyles.panelHeader}>
               <span style={railStyles.panelTitle}>
-                {RAIL_ITEMS.find((r) => r.id === activePanel)?.label ?? ''}
+                {railItems.find((r) => r.id === activePanel)?.label ?? ''}
               </span>
               <button
                 onClick={() => setActivePanel(null)}
@@ -268,6 +282,9 @@ function EditorInner({
               {activePanel === 'pages' && <Sidebar />}
               {activePanel === 'widgets' && <WidgetLibrary />}
               {activePanel === 'templates' && <Templates />}
+              {activePanel === 'ai' && onAISendMessage && (
+                <AIChat onSendMessage={onAISendMessage} onImport={handleImport} />
+              )}
             </div>
           </div>
         )}

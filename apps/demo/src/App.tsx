@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
-import { DesignEditor } from '@reactcanvas/editor';
+import { DesignEditor, LLM_SYSTEM_PROMPT } from '@reactcanvas/editor';
 import type { Document } from '@reactcanvas/core';
+import type { AIChatMessage } from '@reactcanvas/editor';
 import {
   createDefaultDocument,
   createChartElement,
@@ -202,6 +203,42 @@ function App() {
     }
   }, []);
 
+  // Example: wire up AI chat to Anthropic API (or any LLM backend)
+  // The library only provides the chat UI — the parent app owns the API call.
+  const handleAISendMessage = useCallback(async (message: string, history: AIChatMessage[]): Promise<string> => {
+    const apiKey = localStorage.getItem('demo-ai-api-key');
+    if (!apiKey) {
+      throw new Error(
+        'No API key configured. Set localStorage key "demo-ai-api-key" to your Anthropic API key.\n\n' +
+        'Run in browser console:\n  localStorage.setItem("demo-ai-api-key", "sk-ant-...")'
+      );
+    }
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 8192,
+        system: LLM_SYSTEM_PROMPT,
+        messages: [
+          ...history.map((m) => ({ role: m.role, content: m.content })),
+          { role: 'user', content: message },
+        ],
+      }),
+    });
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(`API error ${resp.status}: ${err}`);
+    }
+    const data = await resp.json();
+    return data.content?.[0]?.text ?? '';
+  }, []);
+
   const handleReset = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
     window.location.reload();
@@ -217,6 +254,7 @@ function App() {
         showToolbar={true}
         showSidebar={true}
         showInspector={true}
+        onAISendMessage={handleAISendMessage}
       />
       <button
         onClick={handleReset}

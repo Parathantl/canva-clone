@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useRef, useEffect } from 'react';
 import DOMPurify from 'dompurify';
-import type { CanvasElement, ShapeElement, TextElement, ImageElement, LineElement, ChartElement, KPIElement, TableElement, ProgressElement, EmbedElement, SolidFill, LinearGradientFill, RadialGradientFill } from '@reactcanvas/core';
+import type { CanvasElement, ShapeElement, TextElement, ImageElement, LineElement, ChartElement, KPIElement, TableElement, ProgressElement, EmbedElement } from '@reactcanvas/core';
+import { isSolidFill, isLinearGradient, isRadialGradient } from '@reactcanvas/core';
 import { ChartContent, KPIContent, TableContent, ProgressContent, EmbedContent } from './WidgetRenderers';
 
 interface DOMElementRendererProps {
@@ -279,24 +280,22 @@ function TextContent({
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
   const textColorStyle: React.CSSProperties = (() => {
-    if (element.fill.type === 'solid') {
-      return { color: (element.fill as SolidFill).color };
+    if (isSolidFill(element.fill)) {
+      return { color: element.fill.color };
     }
-    if (element.fill.type === 'linear-gradient') {
-      const grad = element.fill as LinearGradientFill;
-      const stops = grad.stops.map((s: { offset: number; color: string }) => `${s.color} ${s.offset * 100}%`).join(', ');
+    if (isLinearGradient(element.fill)) {
+      const stops = element.fill.stops.map((s: { offset: number; color: string }) => `${s.color} ${s.offset * 100}%`).join(', ');
       return {
-        background: `linear-gradient(${grad.angle}deg, ${stops})`,
+        background: `linear-gradient(${element.fill.angle}deg, ${stops})`,
         WebkitBackgroundClip: 'text',
         WebkitTextFillColor: 'transparent',
         backgroundClip: 'text',
       };
     }
-    if (element.fill.type === 'radial-gradient') {
-      const grad = element.fill as RadialGradientFill;
-      const stops = grad.stops.map((s: { offset: number; color: string }) => `${s.color} ${s.offset * 100}%`).join(', ');
+    if (isRadialGradient(element.fill)) {
+      const stops = element.fill.stops.map((s: { offset: number; color: string }) => `${s.color} ${s.offset * 100}%`).join(', ');
       return {
-        background: `radial-gradient(circle at ${grad.centerX * 100}% ${grad.centerY * 100}%, ${stops})`,
+        background: `radial-gradient(circle at ${element.fill.centerX * 100}% ${element.fill.centerY * 100}%, ${stops})`,
         WebkitBackgroundClip: 'text',
         WebkitTextFillColor: 'transparent',
         backgroundClip: 'text',
@@ -412,18 +411,16 @@ function TextContent({
 }
 
 function getFillStyle(fill: ShapeElement['fill']): React.CSSProperties {
-  if (fill.type === 'solid') {
-    return { backgroundColor: (fill as SolidFill).color };
+  if (isSolidFill(fill)) {
+    return { backgroundColor: fill.color };
   }
-  if (fill.type === 'linear-gradient') {
-    const grad = fill as LinearGradientFill;
-    const stops = grad.stops.map((s: { offset: number; color: string }) => `${s.color} ${s.offset * 100}%`).join(', ');
-    return { background: `linear-gradient(${grad.angle}deg, ${stops})` };
+  if (isLinearGradient(fill)) {
+    const stops = fill.stops.map((s: { offset: number; color: string }) => `${s.color} ${s.offset * 100}%`).join(', ');
+    return { background: `linear-gradient(${fill.angle}deg, ${stops})` };
   }
-  if (fill.type === 'radial-gradient') {
-    const grad = fill as RadialGradientFill;
-    const stops = grad.stops.map((s: { offset: number; color: string }) => `${s.color} ${s.offset * 100}%`).join(', ');
-    return { background: `radial-gradient(circle at ${grad.centerX * 100}% ${grad.centerY * 100}%, ${stops})` };
+  if (isRadialGradient(fill)) {
+    const stops = fill.stops.map((s: { offset: number; color: string }) => `${s.color} ${s.offset * 100}%`).join(', ');
+    return { background: `radial-gradient(circle at ${fill.centerX * 100}% ${fill.centerY * 100}%, ${stops})` };
   }
   return { backgroundColor: '#cccccc' };
 }
@@ -432,14 +429,13 @@ function SvgPolygonShape({ element, points }: { element: ShapeElement; points: s
   const shadowStyle: React.CSSProperties = element.shadow
     ? { filter: `drop-shadow(${element.shadow.offsetX}px ${element.shadow.offsetY}px ${element.shadow.blur}px ${element.shadow.color})` }
     : {};
-  const fillColor = element.fill.type === 'solid' ? (element.fill as SolidFill).color : '#cccccc';
+  const fillColor = isSolidFill(element.fill) ? element.fill.color : '#cccccc';
   const gradientId = `grad-${element.id}`;
 
   return (
     <svg width="100%" height="100%" viewBox={`0 0 ${element.width} ${element.height}`} style={{ display: 'block', ...shadowStyle }}>
-      {element.fill.type === 'linear-gradient' && (() => {
-        const grad = element.fill as LinearGradientFill;
-        const angle = (grad.angle * Math.PI) / 180;
+      {isLinearGradient(element.fill) && (() => {
+        const angle = (element.fill.angle * Math.PI) / 180;
         const x1 = 50 - 50 * Math.cos(angle);
         const y1 = 50 - 50 * Math.sin(angle);
         const x2 = 50 + 50 * Math.cos(angle);
@@ -447,19 +443,18 @@ function SvgPolygonShape({ element, points }: { element: ShapeElement; points: s
         return (
           <defs>
             <linearGradient id={gradientId} x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`}>
-              {grad.stops.map((s: { offset: number; color: string }, i: number) => (
+              {element.fill.stops.map((s: { offset: number; color: string }, i: number) => (
                 <stop key={i} offset={s.offset} stopColor={s.color} />
               ))}
             </linearGradient>
           </defs>
         );
       })()}
-      {element.fill.type === 'radial-gradient' && (() => {
-        const grad = element.fill as RadialGradientFill;
+      {isRadialGradient(element.fill) && (() => {
         return (
           <defs>
-            <radialGradient id={gradientId} cx={`${grad.centerX * 100}%`} cy={`${grad.centerY * 100}%`} r="50%">
-              {grad.stops.map((s: { offset: number; color: string }, i: number) => (
+            <radialGradient id={gradientId} cx={`${element.fill.centerX * 100}%`} cy={`${element.fill.centerY * 100}%`} r="50%">
+              {element.fill.stops.map((s: { offset: number; color: string }, i: number) => (
                 <stop key={i} offset={s.offset} stopColor={s.color} />
               ))}
             </radialGradient>
@@ -468,7 +463,7 @@ function SvgPolygonShape({ element, points }: { element: ShapeElement; points: s
       })()}
       <polygon
         points={points}
-        fill={element.fill.type === 'solid' ? fillColor : `url(#${gradientId})`}
+        fill={isSolidFill(element.fill) ? fillColor : `url(#${gradientId})`}
         stroke={element.stroke?.width ? element.stroke.color : 'none'}
         strokeWidth={element.stroke?.width ?? 0}
         strokeDasharray={element.stroke?.dashPattern?.length ? element.stroke.dashPattern.join(' ') : undefined}

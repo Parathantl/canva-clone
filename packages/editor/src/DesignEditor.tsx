@@ -14,7 +14,7 @@ import { PresentationMode } from './ui/PresentationMode';
 import { ShortcutHelp } from './ui/ShortcutHelp';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { AIChat } from './ui/AIChat';
-import type { AIChatMessage } from './ui/AIChat';
+import type { AIChatMessage, StreamCallback } from './ui/AIChat';
 import { useFontLoader } from './hooks/useFontLoader';
 
 export interface DesignEditorProps {
@@ -30,7 +30,9 @@ export interface DesignEditorProps {
   /** Auto-save debounce interval in ms (default 2000) */
   autoSaveInterval?: number;
   /** AI chat handler — when provided, shows the AI panel in the sidebar. Parent app handles the LLM call. */
-  onAISendMessage?: (message: string, history: AIChatMessage[]) => Promise<string>;
+  onAISendMessage?: (message: string, history: AIChatMessage[], onChunk: StreamCallback) => Promise<string>;
+  /** Optional transform applied to LLM responses before slide parsing. Use createSlideTransformer() for easy setup. */
+  aiTransformResponse?: (responseText: string) => Promise<string> | string;
   showToolbar?: boolean;
   showSidebar?: boolean;
   showInspector?: boolean;
@@ -46,6 +48,7 @@ export function DesignEditor({
   onChange,
   onImageUpload,
   onAISendMessage,
+  aiTransformResponse,
   onAutoSave,
   autoSaveInterval = 2000,
   showToolbar = true,
@@ -102,6 +105,7 @@ export function DesignEditor({
         showInspector={showInspector}
         onImageUpload={onImageUpload}
         onAISendMessage={onAISendMessage}
+        aiTransformResponse={aiTransformResponse}
         className={className}
         style={style}
       />
@@ -127,6 +131,7 @@ function EditorInner({
   showInspector,
   onImageUpload,
   onAISendMessage,
+  aiTransformResponse,
   className,
   style,
 }: {
@@ -136,7 +141,8 @@ function EditorInner({
   showSidebar: boolean;
   showInspector: boolean;
   onImageUpload?: (blob: Blob, filename: string) => Promise<string>;
-  onAISendMessage?: (message: string, history: AIChatMessage[]) => Promise<string>;
+  onAISendMessage?: (message: string, history: AIChatMessage[], onChunk: StreamCallback) => Promise<string>;
+  aiTransformResponse?: (responseText: string) => Promise<string> | string;
   className?: string;
   style?: React.CSSProperties;
 }) {
@@ -283,7 +289,11 @@ function EditorInner({
               {activePanel === 'widgets' && <WidgetLibrary />}
               {activePanel === 'templates' && <Templates />}
               {activePanel === 'ai' && onAISendMessage && (
-                <AIChat onSendMessage={onAISendMessage} onImport={handleImport} />
+                <AIChat
+                  onSendMessage={onAISendMessage}
+                  transformResponse={aiTransformResponse}
+                  onImport={handleImport}
+                />
               )}
             </div>
           </div>

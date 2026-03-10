@@ -33,3 +33,11 @@ export {
 
 // Plugin System (Strategy Pattern)
 export { PluginManager } from './plugins/PluginManager';
+
+// Type Guards
+export {
+  isSolidFill,
+  isLinearGradient,
+  isRadialGradient,
+  isGradientFill,
+} from './utils/typeGuards';

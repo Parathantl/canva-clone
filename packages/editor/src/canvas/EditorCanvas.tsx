@@ -13,6 +13,18 @@ import { copyElements, pasteElements, flipElements, getClipboard } from './useCl
 import { computeSmartGuides, type Guide } from './smartGuides';
 import { processImageFile } from '../utils/imageUpload';
 import { ContextMenu } from './ContextMenu';
+import {
+  NUDGE_AMOUNT,
+  NUDGE_SHIFT_AMOUNT,
+  ZOOM_FACTOR,
+  ZOOM_MIN,
+  ZOOM_MAX,
+  ROTATION_SNAP_ANGLE,
+  MIN_ELEMENT_SIZE,
+  RUBBERBAND_MIN_DRAG,
+} from './constants';
+import type { DragState } from './types';
+import { getElementCenter, getElementScreenBounds, getBoundingBox, clampZoom } from '../utils/geometry';
 
 export interface EditorCanvasProps {
   width?: number;
@@ -22,49 +34,6 @@ export interface EditorCanvasProps {
   handTool?: boolean;
   onEditingTextChange?: (isEditing: boolean) => void;
 }
-
-type DragState = {
-  type: 'move';
-  ids: string[];
-  startX: number;
-  startY: number;
-  origPositions: Array<{ id: string; x: number; y: number }>;
-} | {
-  type: 'resize';
-  id: string;
-  handle: string;
-  startX: number;
-  startY: number;
-  origX: number;
-  origY: number;
-  origW: number;
-  origH: number;
-  element: CanvasElement;
-  origBounds?: { x: number; y: number; w: number; h: number };
-  origElements?: Array<{ id: string; x: number; y: number; w: number; h: number }>;
-} | {
-  type: 'rotate';
-  id: string;
-  centerX: number;
-  centerY: number;
-  startAngle: number;
-  origRotation: number;
-} | {
-  type: 'rubberband';
-  startClientX: number;
-  startClientY: number;
-  currentClientX: number;
-  currentClientY: number;
-} | {
-  type: 'pan';
-  startClientX: number;
-  startClientY: number;
-  origPanX: number;
-  origPanY: number;
-};
-
-const NUDGE_AMOUNT = 1;
-const NUDGE_SHIFT_AMOUNT = 10;
 
 export function EditorCanvas({ width = 1200, height = 800, className, canvasRef: externalCanvasRef, handTool: handToolProp = false, onEditingTextChange }: EditorCanvasProps) {
   const internalCanvasRef = useRef<HTMLDivElement>(null);
@@ -266,9 +235,9 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
         const pointerX = e.clientX - rect.left;
         const pointerY = e.clientY - rect.top;
         const direction = e.deltaY > 0 ? -1 : 1;
-        const factor = 1.1;
+        const factor = ZOOM_FACTOR;
         const newScale = direction > 0 ? z * factor : z / factor;
-        const clampedScale = Math.min(10, Math.max(0.1, newScale));
+        const clampedScale = clampZoom(newScale, ZOOM_MIN, ZOOM_MAX);
         const mousePointTo = {
           x: (pointerX - px) / z,
           y: (pointerY - py) / z,
@@ -406,10 +375,11 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
           .map((eid) => elements.find((el) => el.id === eid))
           .filter((el): el is CanvasElement => !!el && !el.locked);
 
-        const bx = Math.min(...resizeElements.map((e) => e.x));
-        const by = Math.min(...resizeElements.map((e) => e.y));
-        const bx2 = Math.max(...resizeElements.map((e) => e.x + e.width));
-        const by2 = Math.max(...resizeElements.map((e) => e.y + (e.height ?? 40)));
+        const bb = getBoundingBox(resizeElements)!;
+        const bx = bb.minX;
+        const by = bb.minY;
+        const bw = bb.maxX - bb.minX;
+        const bh = bb.maxY - bb.minY;
 
         setDragging({
           type: 'resize',
@@ -419,10 +389,10 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
           startY: e.clientY,
           origX: bx,
           origY: by,
-          origW: bx2 - bx,
-          origH: by2 - by,
+          origW: bw,
+          origH: bh,
           element: el,
-          origBounds: { x: bx, y: by, w: bx2 - bx, h: by2 - by },
+          origBounds: { x: bx, y: by, w: bw, h: bh },
           origElements: resizeElements.map((e) => ({ id: e.id, x: e.x, y: e.y, w: e.width, h: e.height ?? 40 })),
         });
       } else {
@@ -451,15 +421,14 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
       e.stopPropagation();
       e.preventDefault();
 
-      const centerX = offsetX + (el.x + el.width / 2) * zoom;
-      const centerY = offsetY + (el.y + el.height / 2) * zoom;
-      const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
+      const center = getElementCenter(el, offsetX, offsetY, zoom);
+      const startAngle = Math.atan2(e.clientY - center.y, e.clientX - center.x) * (180 / Math.PI);
 
       setDragging({
         type: 'rotate',
         id,
-        centerX,
-        centerY,
+        centerX: center.x,
+        centerY: center.y,
         startAngle,
         origRotation: el.rotation,
       });
@@ -532,8 +501,8 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
           }
         }
 
-        if (newW < 10) { newW = 10; newX = dragging.origX + dragging.origW - 10; }
-        if (newH < 10) { newH = 10; newY = dragging.origY + dragging.origH - 10; }
+        if (newW < MIN_ELEMENT_SIZE) { newW = MIN_ELEMENT_SIZE; newX = dragging.origX + dragging.origW - MIN_ELEMENT_SIZE; }
+        if (newH < MIN_ELEMENT_SIZE) { newH = MIN_ELEMENT_SIZE; newY = dragging.origY + dragging.origH - MIN_ELEMENT_SIZE; }
 
         // Multi-select resize: scale all elements proportionally within the bounding box
         if (dragging.origBounds && dragging.origElements) {
@@ -544,8 +513,8 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
           for (const orig of dragging.origElements) {
             const elNewX = newX + (orig.x - ob.x) * scaleX;
             const elNewY = newY + (orig.y - ob.y) * scaleY;
-            const elNewW = Math.max(10, orig.w * scaleX);
-            const elNewH = Math.max(10, orig.h * scaleY);
+            const elNewW = Math.max(MIN_ELEMENT_SIZE, orig.w * scaleX);
+            const elNewH = Math.max(MIN_ELEMENT_SIZE, orig.h * scaleY);
             updateElement(orig.id, { x: elNewX, y: elNewY, width: elNewW, height: elNewH } as Partial<CanvasElement>);
           }
         } else {
@@ -571,7 +540,7 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
         let newRotation = dragging.origRotation + (currentAngle - dragging.startAngle);
 
         if (e.shiftKey) {
-          newRotation = Math.round(newRotation / 15) * 15;
+          newRotation = Math.round(newRotation / ROTATION_SNAP_ANGLE) * ROTATION_SNAP_ANGLE;
         }
 
         while (newRotation > 180) newRotation -= 360;
@@ -600,13 +569,10 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
         const y2 = Math.max(dragging.startClientY, e.clientY);
 
         // Only select if dragged at least a few pixels
-        if (x2 - x1 > 5 || y2 - y1 > 5) {
+        if (x2 - x1 > RUBBERBAND_MIN_DRAG || y2 - y1 > RUBBERBAND_MIN_DRAG) {
           const ids = sortedElements.filter((el) => {
-            const elLeft = offsetX + el.x * zoom;
-            const elTop = offsetY + el.y * zoom;
-            const elRight = elLeft + el.width * zoom;
-            const elBottom = elTop + el.height * zoom;
-            return elLeft < x2 && elRight > x1 && elTop < y2 && elBottom > y1;
+            const bounds = getElementScreenBounds(el, offsetX, offsetY, zoom);
+            return bounds.left < x2 && bounds.right > x1 && bounds.top < y2 && bounds.bottom > y1;
           }).map((el) => el.id);
 
           if (ids.length > 0) {

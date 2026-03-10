@@ -429,3 +429,57 @@ export const LLM_SYSTEM_PROMPT = `You generate presentation slides as JSON. Use 
 
 Canvas is \${width}x\${height} pixels. Position elements using x,y from top-left.
 Return ONLY valid JSON, no markdown fences or explanation.`;
+
+// ============================================================
+// Slide Transformer Helper
+// ============================================================
+
+/** A generic LLM caller — takes a system prompt + user message, returns the LLM's response text */
+export type LLMCaller = (systemPrompt: string, userMessage: string) => Promise<string>;
+
+/**
+ * Creates a transformResponse function for AIChat.
+ *
+ * Use this when your backend (e.g. a copilot) returns natural language + data,
+ * and you need a second LLM call to convert that into slide JSON.
+ *
+ * The library handles the prompt engineering — you just provide a way to call any LLM.
+ *
+ * @example
+ * ```tsx
+ * import { createSlideTransformer } from '@reactcanvas/editor';
+ *
+ * const transform = createSlideTransformer(async (systemPrompt, userMessage) => {
+ *   const res = await fetch('/api/llm', {
+ *     method: 'POST',
+ *     body: JSON.stringify({ system: systemPrompt, message: userMessage }),
+ *   });
+ *   return await res.text();
+ * });
+ *
+ * <DesignEditor
+ *   onAISendMessage={callYourCopilot}
+ *   transformResponse={transform}
+ * />
+ * ```
+ */
+export function createSlideTransformer(callLLM: LLMCaller): (responseText: string) => Promise<string> {
+  return async (responseText: string): Promise<string> => {
+    // If the response already looks like valid slide JSON, skip the transform
+    const trimmed = responseText.trim();
+    try {
+      const parsed = JSON.parse(
+        trimmed.startsWith('{') ? trimmed : (trimmed.match(/```(?:json)?\s*([\s\S]*?)```/)?.[1] ?? trimmed)
+      );
+      if (parsed?.title && Array.isArray(parsed?.slides)) {
+        return responseText; // Already valid slide JSON — no transform needed
+      }
+    } catch {
+      // Not JSON, proceed with transform
+    }
+
+    const userMessage = `Convert the following data and information into a visually appealing slide presentation. Use appropriate element types (KPIs for metrics, charts for trends, tables for lists, text for titles/descriptions). Choose a professional dark theme with good contrast.\n\nData to convert:\n\n${responseText}`;
+
+    return callLLM(LLM_SYSTEM_PROMPT, userMessage);
+  };
+}

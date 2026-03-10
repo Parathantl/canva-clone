@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { useSelection, useElements, usePages } from '@reactcanvas/react';
-import type { CanvasElement, ShapeElement, LineElement, ChartElement, KPIElement, TableElement, ProgressElement, EmbedElement, ImageElement, Fill, LinearGradientFill, RadialGradientFill, Shadow } from '@reactcanvas/core';
+import type { CanvasElement, ShapeElement, LineElement, ChartElement, KPIElement, TableElement, ProgressElement, EmbedElement, ImageElement, Fill, Shadow } from '@reactcanvas/core';
+import { isSolidFill, isLinearGradient, isRadialGradient, isGradientFill } from '@reactcanvas/core';
 import { FILTER_PRESETS, applyFilterPreset } from '@reactcanvas/images';
 import { ColorPicker } from './ColorPicker';
 
@@ -327,7 +328,7 @@ function ShapeInspector({ element }: { element: ShapeElement }) {
   const { updateElement } = useElements();
 
   const fillType = element.fill.type;
-  const fillColor = element.fill.type === 'solid' ? element.fill.color : '#cccccc';
+  const fillColor = isSolidFill(element.fill) ? element.fill.color : '#cccccc';
 
   const handleFillTypeChange = (newType: string) => {
     let newFill: Fill;
@@ -358,7 +359,8 @@ function ShapeInspector({ element }: { element: ShapeElement }) {
   };
 
   const updateGradientStopProp = (index: number, updates: Partial<{ offset: number; color: string }>) => {
-    const grad = element.fill as LinearGradientFill | RadialGradientFill;
+    if (!isGradientFill(element.fill)) return;
+    const grad = element.fill;
     const newStops = grad.stops.map((s: { offset: number; color: string }, i: number) =>
       i === index ? { ...s, ...updates } : s
     );
@@ -403,7 +405,7 @@ function ShapeInspector({ element }: { element: ShapeElement }) {
           </select>
         </PropertyRow>
 
-        {fillType === 'solid' && (
+        {isSolidFill(element.fill) && (
           <ColorPicker
             color={fillColor}
             label="Color"
@@ -415,8 +417,8 @@ function ShapeInspector({ element }: { element: ShapeElement }) {
           />
         )}
 
-        {fillType === 'linear-gradient' && (() => {
-          const grad = element.fill as LinearGradientFill;
+        {isLinearGradient(element.fill) && (() => {
+          const grad = element.fill;
           return (
             <>
               <PropertyRow label="Angle">
@@ -441,8 +443,8 @@ function ShapeInspector({ element }: { element: ShapeElement }) {
           );
         })()}
 
-        {fillType === 'radial-gradient' && (() => {
-          const grad = element.fill as RadialGradientFill;
+        {isRadialGradient(element.fill) && (() => {
+          const grad = element.fill;
           return (
             <GradientStopEditor
               stops={grad.stops}

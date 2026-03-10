@@ -10,77 +10,91 @@ export interface AIChatMessage {
   error?: string;
 }
 
+/** Callback to push streaming chunks into the chat UI */
+export type StreamCallback = (chunk: string) => void;
+
 export interface AIChatProps {
-  /** Called when the user sends a message. Parent app makes the LLM call and returns the response text. */
-  onSendMessage: (message: string, history: AIChatMessage[]) => Promise<string>;
+  /**
+   * Called when the user sends a message. Two usage modes:
+   *
+   * 1. Simple (non-streaming): return the full response text as a string.
+   *    onSendMessage={async (message, history) => { return "full response"; }}
+   *
+   * 2. Streaming (SSE): call onChunk() with each chunk as it arrives,
+   *    then return the final accumulated text.
+   *    onSendMessage={async (message, history, onChunk) => {
+   *      let full = '';
+   *      for await (const chunk of sseStream) {
+   *        full += chunk;
+   *        onChunk(chunk);
+   *      }
+   *      return full;
+   *    }}
+   */
+  onSendMessage: (
+    message: string,
+    history: AIChatMessage[],
+    onChunk: StreamCallback,
+  ) => Promise<string>;
+  /**
+   * Optional transform applied to the LLM response before slide parsing.
+   * Use this when your backend returns natural language + data (not slide JSON).
+   *
+   * Example: call a second LLM to convert copilot response → slide JSON,
+   * or extract structured data from the response and build slide JSON yourself.
+   *
+   * Return a SlidePresentation JSON string, or return the original text as-is
+   * to show it as a plain chat message (no slide conversion).
+   */
+  transformResponse?: (responseText: string) => Promise<string> | string;
   /** Called when user clicks "Apply to Canvas" on a valid slide response */
   onImport: (document: Document) => void;
-  /** Whether the parent is currently processing a request */
-  isLoading?: boolean;
   /** Placeholder text for the input */
   placeholder?: string;
 }
 
-export function AIChat({ onSendMessage, onImport, isLoading: externalLoading, placeholder }: AIChatProps) {
+export function AIChat({ onSendMessage, transformResponse, onImport, placeholder }: AIChatProps) {
   const [messages, setMessages] = useState<AIChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [streamingText, setStreamingText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const loading = externalLoading ?? isLoading;
-
-  // Scroll to bottom on new messages
+  // Scroll to bottom on new messages or streaming updates
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, streamingText]);
 
   const sendMessage = useCallback(async () => {
     const prompt = input.trim();
-    if (!prompt || loading) return;
+    if (!prompt || isLoading) return;
 
     setInput('');
     const userMsg: AIChatMessage = { role: 'user', content: prompt };
-    const updatedMessages = [...messages, userMsg];
-    setMessages(updatedMessages);
+    setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
+    setStreamingText('');
 
     try {
-      const responseText = await onSendMessage(prompt, messages);
+      // Stream callback — parent calls this with each chunk from SSE
+      const onChunk: StreamCallback = (chunk: string) => {
+        setStreamingText((prev) => prev + chunk);
+      };
 
-      // Try to extract JSON from the response
-      let jsonStr = responseText.trim();
-      const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (fenceMatch) {
-        jsonStr = fenceMatch[1].trim();
-      }
+      const rawResponse = await onSendMessage(prompt, messages, onChunk);
+      setStreamingText('');
 
-      // Try to parse as slide JSON
-      let assistantMsg: AIChatMessage;
-      try {
-        const parsed = JSON.parse(jsonStr);
-        const validation = validateSlidePresentation(parsed);
-        if (validation.valid) {
-          const doc = convertSlidesToDocument(parsed);
-          assistantMsg = {
-            role: 'assistant',
-            content: `Created "${parsed.title}" with ${parsed.slides.length} slide${parsed.slides.length > 1 ? 's' : ''}.`,
-            document: doc,
-          };
-        } else {
-          assistantMsg = {
-            role: 'assistant',
-            content: responseText,
-            error: validation.error,
-          };
-        }
-      } catch {
-        // Not JSON — show as text response
-        assistantMsg = { role: 'assistant', content: responseText };
-      }
+      // Apply optional transform (e.g. convert copilot response → slide JSON)
+      const responseText = transformResponse
+        ? await transformResponse(rawResponse)
+        : rawResponse;
 
+      // Try to extract JSON slides from the response
+      const assistantMsg = parseResponse(responseText);
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err) {
+      setStreamingText('');
       setMessages((prev) => [
         ...prev,
         {
@@ -92,7 +106,7 @@ export function AIChat({ onSendMessage, onImport, isLoading: externalLoading, pl
     } finally {
       setIsLoading(false);
     }
-  }, [input, loading, messages, onSendMessage]);
+  }, [input, isLoading, messages, onSendMessage, transformResponse]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -108,7 +122,7 @@ export function AIChat({ onSendMessage, onImport, isLoading: externalLoading, pl
     <div style={styles.container}>
       {/* Messages */}
       <div style={styles.messages}>
-        {messages.length === 0 && (
+        {messages.length === 0 && !isLoading && (
           <div style={styles.emptyState}>
             <div style={styles.emptyIcon}>{'\u2728'}</div>
             <div style={styles.emptyTitle}>AI Slide Generator</div>
@@ -148,9 +162,14 @@ export function AIChat({ onSendMessage, onImport, isLoading: externalLoading, pl
           </div>
         ))}
 
-        {loading && (
+        {/* Streaming text — shown while SSE chunks arrive */}
+        {isLoading && (
           <div style={styles.assistantMsg}>
-            <div style={styles.loadingDots}>Generating slides...</div>
+            {streamingText ? (
+              <div style={styles.msgText}>{streamingText}</div>
+            ) : (
+              <div style={styles.loadingDots}>Generating...</div>
+            )}
           </div>
         )}
         <div ref={messagesEndRef} />
@@ -167,15 +186,15 @@ export function AIChat({ onSendMessage, onImport, isLoading: externalLoading, pl
             placeholder={placeholder ?? 'Describe the slides you want...'}
             style={styles.textarea}
             rows={1}
-            disabled={loading}
+            disabled={isLoading}
           />
           <button
             style={{
               ...styles.sendBtn,
-              ...(input.trim() && !loading ? {} : styles.sendBtnDisabled),
+              ...(input.trim() && !isLoading ? {} : styles.sendBtnDisabled),
             }}
             onClick={sendMessage}
-            disabled={!input.trim() || loading}
+            disabled={!input.trim() || isLoading}
           >
             {'\u2191'}
           </button>
@@ -183,6 +202,36 @@ export function AIChat({ onSendMessage, onImport, isLoading: externalLoading, pl
       </div>
     </div>
   );
+}
+
+/** Parse an LLM response — extract JSON slides or return as plain text */
+function parseResponse(responseText: string): AIChatMessage {
+  let jsonStr = responseText.trim();
+  const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) {
+    jsonStr = fenceMatch[1].trim();
+  }
+
+  try {
+    const parsed = JSON.parse(jsonStr);
+    const validation = validateSlidePresentation(parsed);
+    if (validation.valid) {
+      const doc = convertSlidesToDocument(parsed);
+      return {
+        role: 'assistant',
+        content: `Created "${parsed.title}" with ${parsed.slides.length} slide${parsed.slides.length > 1 ? 's' : ''}.`,
+        document: doc,
+      };
+    }
+    return {
+      role: 'assistant',
+      content: responseText,
+      error: validation.error,
+    };
+  } catch {
+    // Not JSON — plain text response
+    return { role: 'assistant', content: responseText };
+  }
 }
 
 const SUGGESTIONS = [

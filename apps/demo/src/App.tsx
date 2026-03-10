@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
-import { DesignEditor, LLM_SYSTEM_PROMPT } from '@reactcanvas/editor';
+import { DesignEditor, LLM_SYSTEM_PROMPT, createSlideTransformer } from '@reactcanvas/editor';
 import type { Document } from '@reactcanvas/core';
-import type { AIChatMessage } from '@reactcanvas/editor';
+import type { AIChatMessage, StreamCallback } from '@reactcanvas/editor';
 import {
   createDefaultDocument,
   createChartElement,
@@ -203,9 +203,18 @@ function App() {
     }
   }, []);
 
-  // Example: wire up AI chat to Anthropic API (or any LLM backend)
-  // The library only provides the chat UI — the parent app owns the API call.
-  const handleAISendMessage = useCallback(async (message: string, history: AIChatMessage[]): Promise<string> => {
+  // Example: wire up AI chat with SSE streaming support.
+  // The library provides the chat UI — the parent app owns the API call.
+  //
+  // For your Velaris backend:
+  //   POST /csm/v1/bff/copilot/chats with { user_input } → event stream
+  //   Call onChunk() with each SSE chunk so text streams live in the UI.
+  //   Return the final accumulated text when the stream ends.
+  const handleAISendMessage = useCallback(async (
+    message: string,
+    _history: AIChatMessage[],
+    onChunk: StreamCallback,
+  ): Promise<string> => {
     const apiKey = localStorage.getItem('demo-ai-api-key');
     if (!apiKey) {
       throw new Error(
@@ -213,6 +222,8 @@ function App() {
         'Run in browser console:\n  localStorage.setItem("demo-ai-api-key", "sk-ant-...")'
       );
     }
+
+    // Streaming example using Anthropic's SSE endpoint
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -224,20 +235,77 @@ function App() {
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 8192,
+        stream: true,
         system: LLM_SYSTEM_PROMPT,
-        messages: [
-          ...history.map((m) => ({ role: m.role, content: m.content })),
-          { role: 'user', content: message },
-        ],
+        messages: [{ role: 'user', content: message }],
       }),
     });
+
     if (!resp.ok) {
       const err = await resp.text();
       throw new Error(`API error ${resp.status}: ${err}`);
     }
-    const data = await resp.json();
-    return data.content?.[0]?.text ?? '';
+
+    // Read SSE stream, push chunks to UI
+    let fullText = '';
+    const reader = resp.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // Parse SSE lines
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6);
+        if (data === '[DONE]') continue;
+        try {
+          const event = JSON.parse(data);
+          if (event.type === 'content_block_delta' && event.delta?.text) {
+            fullText += event.delta.text;
+            onChunk(event.delta.text);
+          }
+        } catch {
+          // Skip non-JSON SSE lines
+        }
+      }
+    }
+
+    return fullText;
   }, []);
+
+  // Transform copilot responses into slide JSON using a second LLM call.
+  // createSlideTransformer handles the prompt — you just provide an LLM caller.
+  // If the response is already valid slide JSON, the transform is skipped automatically.
+  const handleTransformResponse = createSlideTransformer(
+    async (systemPrompt, userMessage) => {
+      const apiKey = localStorage.getItem('demo-ai-api-key');
+      if (!apiKey) throw new Error('No API key for slide transform');
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 8192,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userMessage }],
+        }),
+      });
+      if (!resp.ok) throw new Error(`Transform API error ${resp.status}`);
+      const data = await resp.json();
+      return data.content?.[0]?.text ?? '';
+    }
+  );
 
   const handleReset = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
@@ -255,6 +323,7 @@ function App() {
         showSidebar={true}
         showInspector={true}
         onAISendMessage={handleAISendMessage}
+        aiTransformResponse={handleTransformResponse}
       />
       <button
         onClick={handleReset}

@@ -12,6 +12,174 @@ import {
 
 const STORAGE_KEY = 'reactcanvas-doc';
 
+// AI Provider types
+type AIProvider = 'anthropic' | 'openai';
+
+const AI_PROVIDER_KEY = 'demo-ai-provider';
+const AI_API_KEY_STORAGE = 'demo-ai-api-key';
+
+function getProvider(): AIProvider {
+  return (localStorage.getItem(AI_PROVIDER_KEY) as AIProvider) || 'anthropic';
+}
+
+function getApiKey(): string | null {
+  return localStorage.getItem(AI_API_KEY_STORAGE);
+}
+
+/** Call Anthropic's streaming API */
+async function streamAnthropic(
+  apiKey: string,
+  systemPrompt: string,
+  userMessage: string,
+  onChunk?: StreamCallback,
+): Promise<string> {
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 8192,
+      stream: !!onChunk,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+    }),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.text();
+    throw new Error(`Anthropic API error ${resp.status}: ${err}`);
+  }
+
+  if (!onChunk) {
+    const data = await resp.json();
+    return data.content?.[0]?.text ?? '';
+  }
+
+  // Read SSE stream
+  let fullText = '';
+  const reader = resp.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const data = line.slice(6);
+      if (data === '[DONE]') continue;
+      try {
+        const event = JSON.parse(data);
+        if (event.type === 'content_block_delta' && event.delta?.text) {
+          fullText += event.delta.text;
+          onChunk(event.delta.text);
+        }
+      } catch {
+        // Skip non-JSON SSE lines
+      }
+    }
+  }
+
+  return fullText;
+}
+
+/** Call OpenAI's streaming API */
+async function streamOpenAI(
+  apiKey: string,
+  systemPrompt: string,
+  userMessage: string,
+  onChunk?: StreamCallback,
+): Promise<string> {
+  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      max_tokens: 8192,
+      stream: !!onChunk,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+    }),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.text();
+    throw new Error(`OpenAI API error ${resp.status}: ${err}`);
+  }
+
+  if (!onChunk) {
+    const data = await resp.json();
+    return data.choices?.[0]?.message?.content ?? '';
+  }
+
+  // Read SSE stream
+  let fullText = '';
+  const reader = resp.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const data = line.slice(6).trim();
+      if (data === '[DONE]') continue;
+      try {
+        const event = JSON.parse(data);
+        const text = event.choices?.[0]?.delta?.content;
+        if (text) {
+          fullText += text;
+          onChunk(text);
+        }
+      } catch {
+        // Skip non-JSON SSE lines
+      }
+    }
+  }
+
+  return fullText;
+}
+
+/** Unified LLM call that routes to the selected provider */
+async function callLLM(
+  systemPrompt: string,
+  userMessage: string,
+  onChunk?: StreamCallback,
+): Promise<string> {
+  const provider = getProvider();
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    const example = provider === 'openai'
+      ? 'localStorage.setItem("demo-ai-api-key", "sk-...")'
+      : 'localStorage.setItem("demo-ai-api-key", "sk-ant-...")';
+    throw new Error(
+      `No API key configured for ${provider}.\n\nRun in browser console:\n  ${example}\n\nOr click the provider badge in the AI panel to configure.`
+    );
+  }
+
+  if (provider === 'openai') {
+    return streamOpenAI(apiKey, systemPrompt, userMessage, onChunk);
+  }
+  return streamAnthropic(apiKey, systemPrompt, userMessage, onChunk);
+}
+
 function loadFromLocalStorage(): Document | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -183,6 +351,116 @@ function buildDashboardDocument(): Document {
   return doc;
 }
 
+/** AI Settings modal for provider + API key configuration */
+function AISettingsModal({ onClose }: { onClose: () => void }) {
+  const [provider, setProvider] = useState<AIProvider>(getProvider);
+  const [apiKey, setApiKey] = useState(getApiKey() ?? '');
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = () => {
+    localStorage.setItem(AI_PROVIDER_KEY, provider);
+    if (apiKey.trim()) {
+      localStorage.setItem(AI_API_KEY_STORAGE, apiKey.trim());
+    } else {
+      localStorage.removeItem(AI_API_KEY_STORAGE);
+    }
+    setSaved(true);
+    setTimeout(() => onClose(), 600);
+  };
+
+  return (
+    <div style={settingsStyles.overlay} onClick={onClose}>
+      <div style={settingsStyles.modal} onClick={(e) => e.stopPropagation()}>
+        <div style={settingsStyles.title}>AI Provider Settings</div>
+
+        <div style={settingsStyles.field}>
+          <label style={settingsStyles.label}>Provider</label>
+          <div style={settingsStyles.providerRow}>
+            {(['openai', 'anthropic'] as const).map((p) => (
+              <button
+                key={p}
+                style={{
+                  ...settingsStyles.providerBtn,
+                  ...(provider === p ? settingsStyles.providerBtnActive : {}),
+                }}
+                onClick={() => setProvider(p)}
+              >
+                {p === 'openai' ? 'OpenAI (GPT-4o)' : 'Anthropic (Claude)'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={settingsStyles.field}>
+          <label style={settingsStyles.label}>API Key</label>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder={provider === 'openai' ? 'sk-...' : 'sk-ant-...'}
+            style={settingsStyles.input}
+          />
+          <div style={settingsStyles.hint}>
+            {provider === 'openai'
+              ? 'Get your key from platform.openai.com/api-keys'
+              : 'Get your key from console.anthropic.com'}
+          </div>
+        </div>
+
+        <div style={settingsStyles.actions}>
+          <button style={settingsStyles.cancelBtn} onClick={onClose}>Cancel</button>
+          <button style={settingsStyles.saveBtn} onClick={handleSave}>
+            {saved ? 'Saved!' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const settingsStyles: Record<string, React.CSSProperties> = {
+  overlay: {
+    position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000,
+  },
+  modal: {
+    backgroundColor: '#1e1e2e', border: '1px solid #313244', borderRadius: 12,
+    padding: 24, width: 380, maxWidth: '90vw',
+  },
+  title: {
+    color: '#cdd6f4', fontSize: 16, fontWeight: 600, marginBottom: 20,
+  },
+  field: { marginBottom: 16 },
+  label: {
+    display: 'block', color: '#a6adc8', fontSize: 12, fontWeight: 500, marginBottom: 6,
+  },
+  providerRow: { display: 'flex', gap: 8 },
+  providerBtn: {
+    flex: 1, padding: '8px 12px', border: '1px solid #313244', borderRadius: 8,
+    backgroundColor: '#16161e', color: '#a6adc8', fontSize: 12, cursor: 'pointer',
+    transition: 'all 0.15s',
+  },
+  providerBtnActive: {
+    borderColor: '#89b4fa', color: '#89b4fa', backgroundColor: 'rgba(137,180,250,0.1)',
+  },
+  input: {
+    width: '100%', padding: '8px 12px', border: '1px solid #313244', borderRadius: 8,
+    backgroundColor: '#16161e', color: '#cdd6f4', fontSize: 13, outline: 'none',
+    boxSizing: 'border-box' as const,
+  },
+  hint: { color: '#585878', fontSize: 11, marginTop: 4 },
+  actions: { display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 },
+  cancelBtn: {
+    padding: '8px 16px', border: '1px solid #313244', borderRadius: 8,
+    backgroundColor: 'transparent', color: '#a6adc8', fontSize: 12, cursor: 'pointer',
+  },
+  saveBtn: {
+    padding: '8px 20px', border: 'none', borderRadius: 8,
+    background: 'linear-gradient(135deg, #89b4fa, #cba6f7)', color: '#16161e',
+    fontSize: 12, fontWeight: 600, cursor: 'pointer',
+  },
+};
+
 function App() {
   // Load from localStorage if available, otherwise build the default dashboard
   const [initialDoc] = useState(() => {
@@ -190,6 +468,8 @@ function App() {
     if (saved) return saved;
     return buildDashboardDocument();
   });
+
+  const [showAISettings, setShowAISettings] = useState(false);
 
   const handleChange = useCallback((_doc: Document) => {
     // React to every change — persist to DB, sync with others, etc.
@@ -203,107 +483,19 @@ function App() {
     }
   }, []);
 
-  // Example: wire up AI chat with SSE streaming support.
-  // The library provides the chat UI — the parent app owns the API call.
-  //
-  // For your Velaris backend:
-  //   POST /csm/v1/bff/copilot/chats with { user_input } → event stream
-  //   Call onChunk() with each SSE chunk so text streams live in the UI.
-  //   Return the final accumulated text when the stream ends.
+  // AI chat handler — routes to the selected provider (OpenAI or Anthropic)
   const handleAISendMessage = useCallback(async (
     message: string,
     _history: AIChatMessage[],
     onChunk: StreamCallback,
   ): Promise<string> => {
-    const apiKey = localStorage.getItem('demo-ai-api-key');
-    if (!apiKey) {
-      throw new Error(
-        'No API key configured. Set localStorage key "demo-ai-api-key" to your Anthropic API key.\n\n' +
-        'Run in browser console:\n  localStorage.setItem("demo-ai-api-key", "sk-ant-...")'
-      );
-    }
-
-    // Streaming example using Anthropic's SSE endpoint
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 8192,
-        stream: true,
-        system: LLM_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: message }],
-      }),
-    });
-
-    if (!resp.ok) {
-      const err = await resp.text();
-      throw new Error(`API error ${resp.status}: ${err}`);
-    }
-
-    // Read SSE stream, push chunks to UI
-    let fullText = '';
-    const reader = resp.body!.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      // Parse SSE lines
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6);
-        if (data === '[DONE]') continue;
-        try {
-          const event = JSON.parse(data);
-          if (event.type === 'content_block_delta' && event.delta?.text) {
-            fullText += event.delta.text;
-            onChunk(event.delta.text);
-          }
-        } catch {
-          // Skip non-JSON SSE lines
-        }
-      }
-    }
-
-    return fullText;
+    return callLLM(LLM_SYSTEM_PROMPT, message, onChunk);
   }, []);
 
   // Transform copilot responses into slide JSON using a second LLM call.
-  // createSlideTransformer handles the prompt — you just provide an LLM caller.
-  // If the response is already valid slide JSON, the transform is skipped automatically.
   const handleTransformResponse = createSlideTransformer(
     async (systemPrompt, userMessage) => {
-      const apiKey = localStorage.getItem('demo-ai-api-key');
-      if (!apiKey) throw new Error('No API key for slide transform');
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 8192,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: userMessage }],
-        }),
-      });
-      if (!resp.ok) throw new Error(`Transform API error ${resp.status}`);
-      const data = await resp.json();
-      return data.content?.[0]?.text ?? '';
+      return callLLM(systemPrompt, userMessage);
     }
   );
 
@@ -325,6 +517,44 @@ function App() {
         onAISendMessage={handleAISendMessage}
         aiTransformResponse={handleTransformResponse}
       />
+      {/* AI Settings button */}
+      <button
+        onClick={() => setShowAISettings(true)}
+        style={{
+          position: 'fixed',
+          bottom: 16,
+          right: 120,
+          padding: '8px 16px',
+          backgroundColor: '#313244',
+          color: '#cdd6f4',
+          border: '1px solid #45475a',
+          borderRadius: 8,
+          fontSize: 12,
+          fontWeight: 500,
+          cursor: 'pointer',
+          zIndex: 999,
+          opacity: 0.8,
+          transition: 'opacity 0.15s',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+        onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.8')}
+        title="Configure AI provider and API key"
+      >
+        <span style={{ fontSize: 14 }}>AI</span>
+        <span style={{
+          padding: '1px 6px',
+          borderRadius: 4,
+          backgroundColor: getProvider() === 'openai' ? 'rgba(16,163,127,0.2)' : 'rgba(137,180,250,0.2)',
+          color: getProvider() === 'openai' ? '#10a37f' : '#89b4fa',
+          fontSize: 10,
+          fontWeight: 600,
+        }}>
+          {getProvider() === 'openai' ? 'OpenAI' : 'Claude'}
+        </span>
+      </button>
       <button
         onClick={handleReset}
         style={{
@@ -349,6 +579,7 @@ function App() {
       >
         Reset Demo
       </button>
+      {showAISettings && <AISettingsModal onClose={() => setShowAISettings(false)} />}
     </div>
   );
 }

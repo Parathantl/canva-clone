@@ -28,11 +28,18 @@
   },
   "devDependencies": {
     "tsup": "^8.0.0",
-    "typescript": "^5.7.0",
-    "react": "^18.3.0"
+    "typescript": "^5.7.0"
   },
   "peerDependencies": {
     "react": ">=18.0.0"
   },
+  "keywords": ["dashboard", "canvas", "editor", "react", "chart", "visualization", "quicksight", "data"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/reactcanvas/studio",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/reactcanvas/studio#readme",
+  "sideEffects": false,
   "license": "MIT"
 }

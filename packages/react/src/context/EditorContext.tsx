@@ -3,6 +3,8 @@ import {
   createEditorStore,
   EventBus,
   PluginManager,
+  DataSourceManager,
+  FilterManager,
   type EditorStore,
   type EditorState,
   type Document,
@@ -57,12 +59,14 @@ class HistoryManager {
   get canRedo(): boolean { return this.redoStack.length > 0; }
 }
 
-// Editor instance combines store, event bus, plugin manager, and history
+// Editor instance combines store, event bus, plugin manager, history, and data sources
 export interface EditorInstance {
   store: EditorStore;
   eventBus: EventBus;
   pluginManager: PluginManager;
   historyManager: HistoryManager;
+  dataSourceManager: DataSourceManager;
+  filterManager: FilterManager;
 }
 
 const EditorContext = createContext<EditorInstance | null>(null);
@@ -87,11 +91,21 @@ export function EditorProvider({
     const store = createEditorStore(initialDocument);
     const pluginManager = new PluginManager(eventBus);
     const historyManager = new HistoryManager();
+    const dataSourceManager = new DataSourceManager();
+    const filterManager = new FilterManager();
 
     // Initialize history with the initial document
     historyManager.init(store.getState().document);
 
-    instanceRef.current = { store, eventBus, pluginManager, historyManager };
+    instanceRef.current = { store, eventBus, pluginManager, historyManager, dataSourceManager, filterManager };
+
+    // Register data sources from the document
+    const doc = store.getState().document;
+    if (doc.dataSources) {
+      for (const ds of doc.dataSources) {
+        dataSourceManager.register(ds);
+      }
+    }
 
     // Register plugins
     for (const plugin of plugins) {
@@ -164,6 +178,8 @@ export function EditorProvider({
         }
       }
       instanceRef.current?.eventBus.removeAll();
+      instanceRef.current?.dataSourceManager.destroy();
+      instanceRef.current?.filterManager.destroy();
     };
   }, []);
 

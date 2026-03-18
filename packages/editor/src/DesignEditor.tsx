@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { Document, Plugin, TextElement } from '@reactcanvas/core';
-import { EditorProvider, useShortcuts, useSelection, useElements, useEditor } from '@reactcanvas/react';
+import { EditorProvider, useShortcuts, useSelection, useElements, useEditor, useDataSourceSync, useFilters } from '@reactcanvas/react';
 import { createDefaultPlugins } from '@reactcanvas/plugins';
 import { EditorCanvas } from './canvas/EditorCanvas';
 import { Toolbar } from './ui/Toolbar';
@@ -15,6 +15,8 @@ import { ShortcutHelp } from './ui/ShortcutHelp';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { AIChat } from './ui/AIChat';
 import type { AIChatMessage, StreamCallback } from './ui/AIChat';
+import { DataSourcePanel } from './ui/DataSourcePanel';
+import { FilterBar } from './ui/FilterBar';
 import { useFontLoader } from './hooks/useFontLoader';
 
 export interface DesignEditorProps {
@@ -113,12 +115,13 @@ export function DesignEditor({
   );
 }
 
-type SidePanel = 'pages' | 'widgets' | 'templates' | 'ai' | null;
+type SidePanel = 'pages' | 'widgets' | 'templates' | 'data' | 'ai' | null;
 
 // Icon rail items
 const BASE_railItems: { id: SidePanel; icon: string; label: string }[] = [
   { id: 'pages', icon: '\u25A3', label: 'Pages & Layers' },
   { id: 'widgets', icon: '\u2B1A', label: 'Widgets' },
+  { id: 'data', icon: '\u29C9', label: 'Data Sources' },
   { id: 'templates', icon: '\u2B13', label: 'Templates' },
 ];
 const AI_RAIL_ITEM = { id: 'ai' as SidePanel, icon: '\u2728', label: 'AI' };
@@ -163,6 +166,12 @@ function EditorInner({
   );
 
   useShortcuts();
+
+  // Subscribe to data source updates and auto-push data into bound widgets
+  useDataSourceSync();
+
+  // Cross-widget filtering
+  const { filters, removeFilter, clearAll: clearFilters } = useFilters();
 
   // Detect selected text element for the top text toolbar
   const { selectedElementIds } = useSelection();
@@ -214,7 +223,7 @@ function EditorInner({
         height: '100vh',
         overflow: 'hidden',
         fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        backgroundColor: '#0f0f14',
+        backgroundColor: '#e9ecef',
         ...style,
       }}
     >
@@ -240,7 +249,7 @@ function EditorInner({
           style={{
             borderRadius: 0,
             border: 'none',
-            borderBottom: '1px solid #2a2a3a',
+            borderBottom: '1px solid #dee2e6',
             boxShadow: 'none',
             width: '100%',
             flexShrink: 0,
@@ -287,6 +296,7 @@ function EditorInner({
             <div style={railStyles.panelBody}>
               {activePanel === 'pages' && <Sidebar />}
               {activePanel === 'widgets' && <WidgetLibrary />}
+              {activePanel === 'data' && <DataSourcePanel />}
               {activePanel === 'templates' && <Templates />}
               {activePanel === 'ai' && onAISendMessage && (
                 <AIChat
@@ -299,15 +309,18 @@ function EditorInner({
           </div>
         )}
 
-        {/* Canvas */}
-        <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-          <EditorCanvas
-            width={Math.max(100, layout.canvasWidth)}
-            height={Math.max(100, layout.canvasHeight)}
-            canvasRef={canvasRef}
-            handTool={handTool}
-            onEditingTextChange={setIsEditingText}
-          />
+        {/* Canvas + Filter Bar */}
+        <div style={{ flex: 1, overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+          <FilterBar filters={filters} onRemoveFilter={removeFilter} onClearAll={clearFilters} />
+          <div style={{ flex: 1, overflow: 'hidden' }}>
+            <EditorCanvas
+              width={Math.max(100, layout.canvasWidth)}
+              height={Math.max(100, layout.canvasHeight)}
+              canvasRef={canvasRef}
+              handTool={handTool}
+              onEditingTextChange={setIsEditingText}
+            />
+          </div>
         </div>
 
         {/* Inspector */}
@@ -337,8 +350,8 @@ function EditorInner({
 const railStyles: Record<string, React.CSSProperties> = {
   rail: {
     width: 56,
-    backgroundColor: '#16161e',
-    borderRight: '1px solid #1e1e2e',
+    backgroundColor: '#ffffff',
+    borderRight: '1px solid #f8f9fa',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -352,7 +365,7 @@ const railStyles: Record<string, React.CSSProperties> = {
     border: 'none',
     borderRadius: 10,
     backgroundColor: 'transparent',
-    color: '#585878',
+    color: '#868e96',
     cursor: 'pointer',
     display: 'flex',
     flexDirection: 'column',
@@ -363,8 +376,8 @@ const railStyles: Record<string, React.CSSProperties> = {
     padding: 0,
   },
   railButtonActive: {
-    backgroundColor: '#1e1e2e',
-    color: '#89b4fa',
+    backgroundColor: '#f8f9fa',
+    color: '#4A90D9',
   },
   railIcon: {
     fontSize: 18,
@@ -378,8 +391,8 @@ const railStyles: Record<string, React.CSSProperties> = {
   },
   panel: {
     width: 260,
-    backgroundColor: '#16161e',
-    borderRight: '1px solid #1e1e2e',
+    backgroundColor: '#ffffff',
+    borderRight: '1px solid #f8f9fa',
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
@@ -390,11 +403,11 @@ const railStyles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '14px 16px 10px',
-    borderBottom: '1px solid #1e1e2e',
+    borderBottom: '1px solid #f8f9fa',
     flexShrink: 0,
   },
   panelTitle: {
-    color: '#cdd6f4',
+    color: '#212529',
     fontSize: 13,
     fontWeight: 600,
   },
@@ -404,7 +417,7 @@ const railStyles: Record<string, React.CSSProperties> = {
     border: 'none',
     borderRadius: 6,
     backgroundColor: 'transparent',
-    color: '#585878',
+    color: '#868e96',
     cursor: 'pointer',
     fontSize: 12,
     display: 'flex',

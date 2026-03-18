@@ -42,11 +42,13 @@ export function useSelection() {
     store.getState().selectAll();
   }, [store]);
 
+  const selectedIdSet = useMemo(() => new Set(selectedElementIds), [selectedElementIds]);
+
   const isSelected = useCallback(
     (elementId: string) => {
-      return selectedElementIds.includes(elementId);
+      return selectedIdSet.has(elementId);
     },
-    [selectedElementIds]
+    [selectedIdSet]
   );
 
   return {

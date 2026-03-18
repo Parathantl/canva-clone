@@ -1,7 +1,7 @@
 {
   "name": "@reactcanvas/editor",
   "version": "1.0.0",
-  "description": "Main editor component for ReactCanvas Studio - Canva-like design editor for React",
+  "description": "Customizable dashboard builder & slide editor for React — like QuickSight/Tableau, but open-source and embeddable",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -10,6 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
+    },
+    "./viewer": {
+      "types": "./dist/viewer.d.ts",
+      "import": "./dist/viewer.mjs",
+      "require": "./dist/viewer.js"
     }
   },
   "files": [
@@ -31,8 +36,10 @@
     "@reactcanvas/react": "workspace:*",
     "@reactcanvas/shapes": "workspace:*",
     "@reactcanvas/text": "workspace:*",
+    "chart.js": "^4.5.1",
     "dompurify": "^3.3.2",
-    "html2canvas": "^1.4.1"
+    "html2canvas": "^1.4.1",
+    "react-chartjs-2": "^5.3.1"
   },
   "devDependencies": {
     "@types/dompurify": "^3.2.0",
@@ -47,5 +54,13 @@
     "react": ">=18.0.0",
     "react-dom": ">=18.0.0"
   },
+  "keywords": ["dashboard", "canvas", "editor", "react", "chart", "visualization", "quicksight", "data"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/reactcanvas/studio",
+    "directory": "packages/editor"
+  },
+  "homepage": "https://github.com/reactcanvas/studio#readme",
+  "sideEffects": false,
   "license": "MIT"
 }

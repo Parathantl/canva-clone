@@ -268,7 +268,7 @@ function convertElement(el: SlideElement, layerOrder: number): CanvasElement {
         })),
         showLabels: el.showLabels ?? true,
         showGrid: el.showGrid ?? true,
-        backgroundColor: el.backgroundColor ?? '#1e1e2e',
+        backgroundColor: el.backgroundColor ?? '#ffffff',
         name: el.title ?? 'Chart',
       });
 
@@ -281,8 +281,8 @@ function convertElement(el: SlideElement, layerOrder: number): CanvasElement {
         suffix: el.suffix ?? '',
         trend: el.trend ?? 'neutral',
         trendValue: el.trendValue ?? '',
-        backgroundColor: el.backgroundColor ?? '#1e1e2e',
-        valueColor: el.valueColor ?? '#cdd6f4',
+        backgroundColor: el.backgroundColor ?? '#ffffff',
+        valueColor: el.valueColor ?? '#212529',
         name: el.label,
       });
 
@@ -291,8 +291,8 @@ function convertElement(el: SlideElement, layerOrder: number): CanvasElement {
         ...base,
         headers: el.headers,
         rows: el.rows,
-        headerBg: el.headerBg ?? '#2a2a3a',
-        headerColor: el.headerColor ?? '#cdd6f4',
+        headerBg: el.headerBg ?? '#1e293b',
+        headerColor: el.headerColor ?? '#ffffff',
         name: 'Table',
       });
 
@@ -304,7 +304,7 @@ function convertElement(el: SlideElement, layerOrder: number): CanvasElement {
         label: el.label ?? '',
         progressStyle: el.style ?? 'bar',
         fillColor: el.fillColor ?? '#4A90D9',
-        trackColor: el.trackColor ?? '#2a2a3a',
+        trackColor: el.trackColor ?? '#e9ecef',
         name: el.label ?? 'Progress',
       });
 

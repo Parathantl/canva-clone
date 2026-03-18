@@ -4,10 +4,8 @@ import { useEditorInstance, useEditorStore } from '../context/EditorContext';
 export function useViewport() {
   const { store, eventBus } = useEditorInstance();
 
-  const viewport = useEditorStore((s) => s.viewport);
-  const zoom = useEditorStore((s) => s.viewport.zoom);
-  const panX = useEditorStore((s) => s.viewport.panX);
-  const panY = useEditorStore((s) => s.viewport.panY);
+  const { zoom, panX, panY } = useEditorStore((s) => s.viewport);
+  const viewport = { zoom, panX, panY };
 
   const setZoom = useCallback(
     (newZoom: number) => {
@@ -39,7 +37,7 @@ export function useViewport() {
     if (canvasWidth && canvasHeight && pageWidth && pageHeight) {
       const scaleX = canvasWidth / pageWidth;
       const scaleY = canvasHeight / pageHeight;
-      const fitZoom = Math.min(scaleX, scaleY) * 0.9;
+      const fitZoom = Math.min(scaleX, scaleY) * 0.95;
       setZoom(Math.min(10, Math.max(0.1, fitZoom)));
     } else {
       setZoom(1);

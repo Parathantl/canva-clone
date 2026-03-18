@@ -33,7 +33,16 @@
     "typescript": "^5.7.0"
   },
   "peerDependencies": {
-    "react": ">=18.0.0"
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
   },
+  "keywords": ["dashboard", "canvas", "editor", "react", "chart", "visualization", "quicksight", "data"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/reactcanvas/studio",
+    "directory": "packages/react"
+  },
+  "homepage": "https://github.com/reactcanvas/studio#readme",
+  "sideEffects": false,
   "license": "MIT"
 }

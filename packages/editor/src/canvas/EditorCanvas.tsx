@@ -7,6 +7,7 @@ import {
   useViewport,
   usePages,
   useHistory,
+  useFilters,
 } from '@reactcanvas/react';
 import { DOMElementRenderer } from '../renderers/DOMElementRenderer';
 import { copyElements, pasteElements, flipElements, getClipboard } from './useClipboard';
@@ -39,18 +40,27 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
   const internalCanvasRef = useRef<HTMLDivElement>(null);
   const canvasRef = externalCanvasRef ?? internalCanvasRef;
   const containerRef = useRef<HTMLDivElement>(null);
+  const dblClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { elements, updateElement, removeElements, duplicateElements, addElement, bringToFront, sendToBack, bringForward, sendBackward, groupElements, ungroupElement } = useElements();
   const { selectedElementIds, select, deselectAll, selectAll, selectMultiple } = useSelection();
   const { zoom, panX, panY, setZoom, setPan, zoomToFit } = useViewport();
   const { activePage } = usePages();
   const { undo, redo } = useHistory();
+  const { filters, toggleFilter, addFilter, removeFilter: removeOneFilter, filterManager } = useFilters();
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
-  const hasInitialFit = useRef(false);
-
   // Notify parent when text editing state changes
   useEffect(() => {
     onEditingTextChange?.(!!editingTextId);
   }, [editingTextId, onEditingTextChange]);
+
+  // Clean up pending double-click timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (dblClickTimeoutRef.current !== null) {
+        clearTimeout(dblClickTimeoutRef.current);
+      }
+    };
+  }, []);
   const [dragging, setDragging] = useState<DragState | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [guides, setGuides] = useState<Array<{ type: 'h' | 'v'; pos: number }>>([]);
@@ -59,12 +69,43 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
   const pageWidth = activePage?.width ?? 1920;
   const pageHeight = activePage?.height ?? 1080;
 
-  useEffect(() => {
-    if (!hasInitialFit.current && width > 0 && height > 0) {
-      hasInitialFit.current = true;
-      zoomToFit(width, height, pageWidth, pageHeight);
+  // Cross-widget filter state
+  const activeFilterValues = useMemo(() => {
+    const values = new Set<string>();
+    for (const f of filters) values.add(f.value);
+    return values;
+  }, [filters]);
+
+  const handleFilterClick = useCallback((event: { elementId: string; label: string; field: string; value: string }) => {
+    toggleFilter({
+      sourceElementId: event.elementId,
+      label: event.label,
+      field: event.field,
+      value: event.value,
+    });
+  }, [toggleFilter]);
+
+  // Handle filter control changes (dropdown, search, date range)
+  const handleFilterControlChange = useCallback((elementId: string, field: string, values: string[], label: string) => {
+    // Remove existing filters from this control
+    filterManager.removeSourceFilters(elementId);
+    // Add new filter if a value was selected
+    if (values.length > 0 && label) {
+      addFilter({
+        sourceElementId: elementId,
+        label,
+        field,
+        value: values[0],
+      });
     }
-  }, [width, height, pageWidth, pageHeight, zoomToFit]);
+  }, [filterManager, addFilter]);
+
+  // Fit to screen on initial load, page/document switch, and canvas resize
+  const activePageId = activePage?.id ?? '';
+  useEffect(() => {
+    if (width <= 0 || height <= 0) return;
+    zoomToFit(width, height, pageWidth, pageHeight);
+  }, [width, height, pageWidth, pageHeight, activePageId, zoomToFit]);
 
   const sortedElements = useMemo(
     () => [...(activePage?.elements ?? [])].sort((a, b) => a.layerOrder - b.layerOrder),
@@ -609,7 +650,8 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
         });
         addElement(textEl);
         // Select and start editing the new text element
-        setTimeout(() => {
+        dblClickTimeoutRef.current = setTimeout(() => {
+          dblClickTimeoutRef.current = null;
           select(textEl.id, false);
           setEditingTextId(textEl.id);
         }, 0);
@@ -702,7 +744,7 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
         width,
         height,
         overflow: 'hidden',
-        backgroundColor: '#0f0f14',
+        backgroundColor: '#e9ecef',
         cursor: dragging?.type === 'pan' ? 'grabbing' : isPanMode ? 'grab' : dragging?.type === 'move' ? 'grabbing' : dragging?.type === 'rotate' ? 'grabbing' : dragging?.type === 'rubberband' ? 'crosshair' : 'default',
         outline: 'none',
       }}
@@ -732,7 +774,7 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
             width: pageWidth,
             height: pageHeight,
             backgroundColor: activePage?.backgroundColor ?? '#ffffff',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.05)',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,0,0,0.03)',
           }}
           onMouseDown={handlePageClick}
         >
@@ -753,6 +795,9 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
               onAutoResize={handleAutoResize}
               onTextContentChange={handleTextContentChange}
               onTextEditComplete={handleTextEditComplete}
+              activeFilterValues={activeFilterValues.size > 0 ? activeFilterValues : undefined}
+              onFilterClick={handleFilterClick}
+              onFilterControlChange={handleFilterControlChange}
             />
           ))}
         </div>
@@ -769,8 +814,8 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
             top: rubberBand.top,
             width: rubberBand.width,
             height: rubberBand.height,
-            border: '1px solid #89b4fa',
-            backgroundColor: 'rgba(137, 180, 250, 0.1)',
+            border: '1px solid #4A90D9',
+            backgroundColor: 'rgba(74, 144, 217, 0.1)',
             pointerEvents: 'none',
             zIndex: 9999,
           }}

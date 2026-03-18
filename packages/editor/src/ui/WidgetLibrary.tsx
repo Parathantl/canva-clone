@@ -6,6 +6,7 @@ import {
   createTableElement,
   createProgressElement,
   createEmbedElement,
+  createFilterControlElement,
 } from '@reactcanvas/core';
 
 interface WidgetItem {
@@ -118,6 +119,176 @@ const WIDGET_ITEMS: WidgetItem[] = [
           { label: 'Segment C', value: 30 },
         ],
       }),
+  },
+
+  {
+    id: 'horizontal-bar-chart',
+    name: 'Horizontal Bar',
+    description: 'Horizontal bar chart',
+    icon: '\u2590\u258C',
+    category: 'Charts',
+    create: (lo, cx, cy) =>
+      createChartElement({
+        chartType: 'horizontalBar' as any,
+        layerOrder: lo,
+        x: cx - 240,
+        y: cy - 160,
+        name: 'Horizontal Bar Chart',
+        title: 'Top Categories',
+        data: [
+          { label: 'Electronics', value: 85 },
+          { label: 'Clothing', value: 62 },
+          { label: 'Food', value: 78 },
+          { label: 'Books', value: 45 },
+          { label: 'Sports', value: 55 },
+        ],
+      }),
+  },
+  {
+    id: 'stacked-bar-chart',
+    name: 'Stacked Bar',
+    description: 'Stacked bar chart',
+    icon: '\u2587\u2585',
+    category: 'Charts',
+    create: (lo, cx, cy) =>
+      createChartElement({
+        chartType: 'stackedBar' as any,
+        layerOrder: lo,
+        x: cx - 240,
+        y: cy - 160,
+        name: 'Stacked Bar Chart',
+        title: 'Revenue vs Cost',
+        showLegend: true,
+        data: [],
+        labels: ['Q1', 'Q2', 'Q3', 'Q4'],
+        series: [
+          { name: 'Revenue', data: [65, 85, 45, 95] },
+          { name: 'Cost', data: [40, 55, 30, 60] },
+        ],
+      }),
+  },
+  {
+    id: 'scatter-chart',
+    name: 'Scatter Plot',
+    description: 'Scatter plot chart',
+    icon: '\u2022\u2022',
+    category: 'Charts',
+    create: (lo, cx, cy) =>
+      createChartElement({
+        chartType: 'scatter' as any,
+        layerOrder: lo,
+        x: cx - 240,
+        y: cy - 160,
+        name: 'Scatter Plot',
+        title: 'Distribution',
+        data: [
+          { label: 'A', value: 65 },
+          { label: 'B', value: 85 },
+          { label: 'C', value: 45 },
+          { label: 'D', value: 95 },
+          { label: 'E', value: 55 },
+          { label: 'F', value: 72 },
+        ],
+      }),
+  },
+  {
+    id: 'radar-chart',
+    name: 'Radar Chart',
+    description: 'Radar / spider chart',
+    icon: '\u25CB',
+    category: 'Charts',
+    create: (lo, cx, cy) =>
+      createChartElement({
+        chartType: 'radar' as any,
+        layerOrder: lo,
+        x: cx - 240,
+        y: cy - 160,
+        name: 'Radar Chart',
+        title: 'Performance',
+        showLegend: true,
+        data: [
+          { label: 'Speed', value: 80 },
+          { label: 'Quality', value: 90 },
+          { label: 'Cost', value: 65 },
+          { label: 'Support', value: 75 },
+          { label: 'Innovation', value: 85 },
+        ],
+      }),
+  },
+  {
+    id: 'funnel-chart',
+    name: 'Funnel',
+    description: 'Conversion funnel',
+    icon: '\u25BD',
+    category: 'Charts',
+    create: (lo, cx, cy) =>
+      createChartElement({
+        chartType: 'funnel' as any,
+        layerOrder: lo,
+        x: cx - 240,
+        y: cy - 160,
+        name: 'Funnel Chart',
+        title: 'Sales Funnel',
+        data: [
+          { label: 'Visitors', value: 10000 },
+          { label: 'Leads', value: 4200 },
+          { label: 'Qualified', value: 1800 },
+          { label: 'Proposals', value: 850 },
+          { label: 'Closed', value: 320 },
+        ],
+      }),
+  },
+  {
+    id: 'treemap-chart',
+    name: 'Treemap',
+    description: 'Proportional area chart',
+    icon: '\u25A3',
+    category: 'Charts',
+    create: (lo, cx, cy) =>
+      createChartElement({
+        chartType: 'treemap' as any,
+        layerOrder: lo,
+        x: cx - 240,
+        y: cy - 160,
+        name: 'Treemap',
+        title: 'Revenue by Product',
+        data: [
+          { label: 'Enterprise', value: 450 },
+          { label: 'Business', value: 280 },
+          { label: 'Starter', value: 120 },
+          { label: 'Free Trial', value: 80 },
+          { label: 'Add-ons', value: 60 },
+          { label: 'Services', value: 45 },
+        ],
+      }),
+  },
+  {
+    id: 'heatmap-chart',
+    name: 'Heatmap',
+    description: 'Matrix heatmap',
+    icon: '\u2593',
+    category: 'Charts',
+    create: (lo, cx, cy) =>
+      createChartElement({
+        chartType: 'heatmap' as any,
+        layerOrder: lo,
+        x: cx - 240,
+        y: cy - 180,
+        width: 480,
+        height: 360,
+        name: 'Heatmap',
+        title: 'Activity by Day & Hour',
+        data: [],
+        heatmapRows: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+        heatmapCols: ['9am', '10am', '11am', '12pm', '1pm', '2pm', '3pm', '4pm', '5pm'],
+        heatmapData: [
+          { row: 'Mon', col: '9am', value: 12 }, { row: 'Mon', col: '10am', value: 28 }, { row: 'Mon', col: '11am', value: 45 }, { row: 'Mon', col: '12pm', value: 32 }, { row: 'Mon', col: '1pm', value: 18 }, { row: 'Mon', col: '2pm', value: 38 }, { row: 'Mon', col: '3pm', value: 42 }, { row: 'Mon', col: '4pm', value: 35 }, { row: 'Mon', col: '5pm', value: 15 },
+          { row: 'Tue', col: '9am', value: 15 }, { row: 'Tue', col: '10am', value: 35 }, { row: 'Tue', col: '11am', value: 52 }, { row: 'Tue', col: '12pm', value: 28 }, { row: 'Tue', col: '1pm', value: 22 }, { row: 'Tue', col: '2pm', value: 45 }, { row: 'Tue', col: '3pm', value: 48 }, { row: 'Tue', col: '4pm', value: 30 }, { row: 'Tue', col: '5pm', value: 12 },
+          { row: 'Wed', col: '9am', value: 18 }, { row: 'Wed', col: '10am', value: 42 }, { row: 'Wed', col: '11am', value: 58 }, { row: 'Wed', col: '12pm', value: 35 }, { row: 'Wed', col: '1pm', value: 25 }, { row: 'Wed', col: '2pm', value: 50 }, { row: 'Wed', col: '3pm', value: 55 }, { row: 'Wed', col: '4pm', value: 40 }, { row: 'Wed', col: '5pm', value: 20 },
+          { row: 'Thu', col: '9am', value: 14 }, { row: 'Thu', col: '10am', value: 32 }, { row: 'Thu', col: '11am', value: 48 }, { row: 'Thu', col: '12pm', value: 30 }, { row: 'Thu', col: '1pm', value: 20 }, { row: 'Thu', col: '2pm', value: 42 }, { row: 'Thu', col: '3pm', value: 45 }, { row: 'Thu', col: '4pm', value: 28 }, { row: 'Thu', col: '5pm', value: 10 },
+          { row: 'Fri', col: '9am', value: 10 }, { row: 'Fri', col: '10am', value: 25 }, { row: 'Fri', col: '11am', value: 38 }, { row: 'Fri', col: '12pm', value: 22 }, { row: 'Fri', col: '1pm', value: 15 }, { row: 'Fri', col: '2pm', value: 32 }, { row: 'Fri', col: '3pm', value: 35 }, { row: 'Fri', col: '4pm', value: 20 }, { row: 'Fri', col: '5pm', value: 8 },
+        ],
+      } as any),
   },
 
   // KPI / Metrics
@@ -288,9 +459,72 @@ const WIDGET_ITEMS: WidgetItem[] = [
         embedType: 'website',
       }),
   },
+
+  // Filter Controls
+  {
+    id: 'filter-dropdown',
+    name: 'Dropdown Filter',
+    description: 'Dropdown filter control',
+    icon: '\u25BC',
+    category: 'Filters',
+    create: (lo, cx, cy) =>
+      createFilterControlElement({
+        layerOrder: lo,
+        x: cx - 120,
+        y: cy - 24,
+        width: 240,
+        height: 56,
+        name: 'Dropdown Filter',
+        controlType: 'dropdown',
+        label: 'Category',
+        filterField: 'category',
+        options: ['All', 'Sales', 'Marketing', 'Engineering', 'Support'],
+        placeholder: 'Select category...',
+      }),
+  },
+  {
+    id: 'filter-search',
+    name: 'Search Filter',
+    description: 'Text search filter',
+    icon: '\u2315',
+    category: 'Filters',
+    create: (lo, cx, cy) =>
+      createFilterControlElement({
+        layerOrder: lo,
+        x: cx - 120,
+        y: cy - 24,
+        width: 240,
+        height: 56,
+        name: 'Search Filter',
+        controlType: 'search',
+        label: 'Search',
+        filterField: 'name',
+        placeholder: 'Type to search...',
+      }),
+  },
+  {
+    id: 'filter-daterange',
+    name: 'Date Range',
+    description: 'Date range filter',
+    icon: '\u2630',
+    category: 'Filters',
+    create: (lo, cx, cy) =>
+      createFilterControlElement({
+        layerOrder: lo,
+        x: cx - 160,
+        y: cy - 24,
+        width: 320,
+        height: 56,
+        name: 'Date Range',
+        controlType: 'dateRange',
+        label: 'Date Range',
+        filterField: 'date',
+        placeholder: '',
+      }),
+  },
 ];
 
-const CATEGORIES = ['Charts', 'Metrics', 'Tables', 'Progress', 'Embeds'];
+const CATEGORIES = ['Charts', 'Metrics', 'Tables', 'Progress', 'Filters', 'Embeds'];
 
 export function WidgetLibrary() {
   const { addElement, elements } = useElements();
@@ -382,7 +616,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '10px 14px 8px',
   },
   title: {
-    color: '#585878',
+    color: '#868e96',
     fontSize: 10,
     fontWeight: 700,
     textTransform: 'uppercase',
@@ -394,10 +628,10 @@ const styles: Record<string, React.CSSProperties> = {
   searchInput: {
     width: '100%',
     height: 32,
-    border: '1px solid #2a2a3a',
+    border: '1px solid #dee2e6',
     borderRadius: 8,
-    backgroundColor: '#1e1e2e',
-    color: '#cdd6f4',
+    backgroundColor: '#f8f9fa',
+    color: '#212529',
     fontSize: 12,
     padding: '0 10px',
     outline: 'none',
@@ -414,7 +648,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none',
     borderRadius: 6,
     backgroundColor: 'transparent',
-    color: '#585878',
+    color: '#868e96',
     fontSize: 10,
     fontWeight: 600,
     padding: '5px 8px',
@@ -424,8 +658,8 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: '0.2px',
   },
   tabActive: {
-    backgroundColor: '#1e1e2e',
-    color: '#89b4fa',
+    backgroundColor: '#f8f9fa',
+    color: '#4A90D9',
   },
   grid: {
     flex: 1,
@@ -443,8 +677,8 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     gap: 6,
     padding: '14px 8px',
-    backgroundColor: '#1e1e2e',
-    border: '1px solid #2a2a3a',
+    backgroundColor: '#f8f9fa',
+    border: '1px solid #dee2e6',
     borderRadius: 10,
     cursor: 'pointer',
     transition: 'all 0.12s',
@@ -452,11 +686,11 @@ const styles: Record<string, React.CSSProperties> = {
   widgetIcon: {
     fontSize: 20,
     lineHeight: 1,
-    color: '#89b4fa',
+    color: '#4A90D9',
   },
   widgetName: {
     fontSize: 10,
-    color: '#a0a0c0',
+    color: '#495057',
     fontWeight: 600,
     textAlign: 'center',
     whiteSpace: 'nowrap',
@@ -467,7 +701,7 @@ const styles: Record<string, React.CSSProperties> = {
   empty: {
     gridColumn: '1 / -1',
     textAlign: 'center',
-    color: '#585878',
+    color: '#868e96',
     fontSize: 12,
     padding: '24px 0',
   },

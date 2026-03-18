@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState, useMemo } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import type { Page } from '@reactcanvas/core';
 import { usePages } from '@reactcanvas/react';
 import { DOMElementRenderer } from '../renderers/DOMElementRenderer';
@@ -69,33 +69,7 @@ export function PresentationMode({ isOpen, onClose }: PresentationModeProps) {
     };
   }, [isOpen]);
 
-  // Compute content bounding box and scale
-  const presentation = useMemo(() => {
-    if (!page) return null;
-    const els = page.elements;
-    if (els.length === 0) {
-      // No elements: show the full page
-      return { contentX: 0, contentY: 0, contentW: page.width, contentH: page.height };
-    }
-    // Compute bounding box of all elements
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const el of els) {
-      minX = Math.min(minX, el.x);
-      minY = Math.min(minY, el.y);
-      maxX = Math.max(maxX, el.x + el.width);
-      maxY = Math.max(maxY, el.y + (el.height ?? 40));
-    }
-    // Add padding around content
-    const pad = 40;
-    return {
-      contentX: Math.max(0, minX - pad),
-      contentY: Math.max(0, minY - pad),
-      contentW: Math.min(page.width, maxX + pad) - Math.max(0, minX - pad),
-      contentH: Math.min(page.height, maxY + pad) - Math.max(0, minY - pad),
-    };
-  }, [page]);
-
-  if (!isOpen || !page || !presentation) return null;
+  if (!isOpen || !page) return null;
 
   const sortedElements = [...page.elements].sort((a, b) => a.layerOrder - b.layerOrder);
   const pageWidth = page.width ?? 1920;
@@ -106,22 +80,18 @@ export function PresentationMode({ isOpen, onClose }: PresentationModeProps) {
   const availW = viewportSize.w;
   const availH = viewportSize.h - navBarHeight;
 
-  // Scale to fit content bounding box into available space
-  const scaleX = availW / presentation.contentW;
-  const scaleY = availH / presentation.contentH;
-  const scale = Math.min(scaleX, scaleY, 2); // cap at 2x to avoid pixel artifacts
+  // Scale full page to fit viewport
+  const scaleX = availW / pageWidth;
+  const scaleY = availH / pageHeight;
+  const scale = Math.min(scaleX, scaleY);
 
-  // The visible area in page coordinates
-  const visibleW = availW / scale;
-  const visibleH = availH / scale;
-
-  // Center the content bounding box within the visible area
-  const offsetX = -(presentation.contentX - (visibleW - presentation.contentW) / 2);
-  const offsetY = -(presentation.contentY - (visibleH - presentation.contentH) / 2);
+  // Center the page in the viewport
+  const offsetX = (availW - pageWidth * scale) / 2;
+  const offsetY = (availH - pageHeight * scale) / 2;
 
   return (
     <div style={styles.overlay} onClick={goNext}>
-      {/* Scaled page — using same approach as EditorCanvas */}
+      {/* Scaled page — fit to viewport */}
       <div
         style={{
           position: 'absolute',
@@ -135,13 +105,15 @@ export function PresentationMode({ isOpen, onClose }: PresentationModeProps) {
         <div
           style={{
             position: 'absolute',
-            left: 0,
-            top: 0,
+            left: offsetX,
+            top: offsetY,
             width: pageWidth,
             height: pageHeight,
-            transform: `scale(${scale}) translate(${offsetX}px, ${offsetY}px)`,
+            transform: `scale(${scale})`,
             transformOrigin: '0 0',
             backgroundColor: page.backgroundColor ?? '#ffffff',
+            borderRadius: 8,
+            boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
           }}
         >
           {sortedElements.map((element) => (
@@ -199,7 +171,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: 'rgba(22,22,30,0.9)',
+    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: 12,
     padding: '8px 16px',
     backdropFilter: 'blur(8px)',
@@ -210,8 +182,8 @@ const styles: Record<string, React.CSSProperties> = {
     height: 36,
     border: 'none',
     borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    color: '#cdd6f4',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    color: '#212529',
     fontSize: 16,
     cursor: 'pointer',
     display: 'flex',
@@ -219,7 +191,7 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
   },
   navLabel: {
-    color: '#cdd6f4',
+    color: '#212529',
     fontSize: 14,
     fontWeight: 600,
     minWidth: 60,
@@ -230,8 +202,8 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0 16px',
     border: 'none',
     borderRadius: 8,
-    backgroundColor: 'rgba(232,89,109,0.2)',
-    color: '#E8596D',
+    backgroundColor: 'rgba(224,49,49,0.2)',
+    color: '#e03131',
     fontSize: 13,
     fontWeight: 600,
     cursor: 'pointer',

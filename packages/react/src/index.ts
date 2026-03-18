@@ -13,3 +13,5 @@ export { useHistory } from './hooks/useHistory';
 export { useExport } from './hooks/useExport';
 export type { ExportOptions } from './hooks/useExport';
 export { useShortcuts } from './hooks/useShortcuts';
+export { useDataSources, useDataSourceSync, useDataSourceBinding } from './hooks/useDataSource';
+export { useFilters } from './hooks/useFilters';

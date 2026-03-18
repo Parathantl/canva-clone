@@ -1,68 +1,79 @@
 /**
- * Shared theme constants extracted from UI components.
- * Only values that appear 3+ times across different files are included.
+ * Centralized theme — clean light mode, professional dashboard look.
  */
 
 import type React from 'react';
 
 // ---------------------------------------------------------------------------
-// Color palette
+// Color palette — Light Mode
 // ---------------------------------------------------------------------------
 
 export const colors = {
-  /** Primary background — #16161e (Inspector, Toolbar, Sidebar panels, AIChat, TextToolbar, DesignEditor rail/panel, ErrorBoundary) */
-  bg: '#16161e',
+  /** Primary background — panels, toolbar, sidebars */
+  bg: '#ffffff',
 
-  /** Secondary background — #1e1e2e (inputs, dropdowns, cards, toolGroups, modals, active items, ColorPicker dropdown) */
-  bgSecondary: '#1e1e2e',
+  /** Secondary background — cards, input groups, nested panels */
+  bgSecondary: '#f8f9fa',
 
-  /** Tertiary background — #313244 (TextToolbar inputs, ExportDialog inputs, ShortcutHelp kbd bg) */
-  bgTertiary: '#313244',
+  /** Tertiary background — inputs in dialogs, kbd backgrounds */
+  bgTertiary: '#f1f3f5',
 
-  /** Primary text — #cdd6f4 (headings, input text, labels, nav labels) */
-  text: '#cdd6f4',
+  /** Primary text — headings, main content */
+  text: '#212529',
 
-  /** Muted text — #585878 (section labels, dims, empty states, status icons, tab text) */
-  textMuted: '#585878',
+  /** Muted text — section labels, empty states */
+  textMuted: '#868e96',
 
-  /** Dim text — #8888a8 (icon buttons, secondary labels, suggestions) */
-  textDim: '#8888a8',
+  /** Dim text — icon buttons, secondary labels */
+  textDim: '#495057',
 
-  /** Subdued text — #a6adc8 (descriptions, ExportDialog labels, ShortcutHelp desc) */
-  textSubdued: '#a6adc8',
+  /** Subdued text — descriptions, hints */
+  textSubdued: '#6c757d',
 
-  /** Muted icon/label text — #6c7086 (ExportDialog close, quality value, TextToolbar miniLabel) */
-  textFaint: '#6c7086',
+  /** Faintest text — close buttons, tiny labels */
+  textFaint: '#adb5bd',
 
-  /** Accent blue — #89b4fa (active states, accent borders, slider accent, widget icons, gradient start) */
-  accent: '#89b4fa',
+  /** Accent blue — active states, links, selections */
+  accent: '#4A90D9',
 
-  /** Accent purple — #cba6f7 (gradient end, used with accent for linear-gradient) */
-  accentPurple: '#cba6f7',
+  /** Accent blue hover */
+  accentHover: '#3a7bc8',
 
-  /** Primary border — #1e1e2e (panel/section borders — borderBottom, borderRight, borderLeft) */
-  border: '#1e1e2e',
+  /** Accent purple — gradient end */
+  accentPurple: '#7c5cbf',
 
-  /** Secondary border — #2a2a3a (input borders, card borders, dividers in Inspector/Sidebar/WidgetLibrary/Templates) */
-  borderLight: '#2a2a3a',
+  /** Accent tint background */
+  accentBg: '#e7f0ff',
 
-  /** Tertiary border — #45475a (TextToolbar dividers/inputs, ExportDialog borders, ShortcutHelp kbd border) */
-  borderMedium: '#45475a',
+  /** Primary border — panel dividers */
+  border: '#e9ecef',
 
-  /** Modal border — #313244 (ExportDialog, ShortcutHelp, ColorPicker dropdown borders) */
-  borderModal: '#313244',
+  /** Secondary border — input borders, card borders */
+  borderLight: '#dee2e6',
 
-  /** Error text — #f38ba8 (AIChat error box) */
-  error: '#f38ba8',
+  /** Tertiary border — active inputs, stronger dividers */
+  borderMedium: '#ced4da',
 
-  /** Success green — #50C878 (used in KPI trend colors, progress fills) */
-  success: '#50C878',
+  /** Modal border */
+  borderModal: '#dee2e6',
 
-  /** Active element bg — #2a2a44 (Toolbar btnActive, AIChat user message bg) */
-  bgActive: '#2a2a44',
+  /** Error text */
+  error: '#e03131',
 
-  /** Canvas/editor background — #0f0f14 (DesignEditor outer container) */
-  bgCanvas: '#0f0f14',
+  /** Error background */
+  errorBg: '#fff5f5',
+
+  /** Success green */
+  success: '#2b8a3e',
+
+  /** Success background */
+  successBg: '#ebfbee',
+
+  /** Active element bg (blue tint) */
+  bgActive: '#e7f0ff',
+
+  /** Canvas/editor background */
+  bgCanvas: '#e9ecef',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -70,7 +81,7 @@ export const colors = {
 // ---------------------------------------------------------------------------
 
 export const gradients = {
-  /** Primary accent gradient — used on export button, apply button, logo */
+  /** Primary accent gradient */
   accent: `linear-gradient(135deg, ${colors.accent}, ${colors.accentPurple})`,
 } as const;
 
@@ -78,7 +89,6 @@ export const gradients = {
 // Common component style fragments
 // ---------------------------------------------------------------------------
 
-/** Base styles for small icon/tool buttons (transparent bg, centered flex) */
 export const buttonBase: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -92,25 +102,22 @@ export const buttonBase: React.CSSProperties = {
   lineHeight: 1,
 };
 
-/** Active state for toggle buttons */
 export const buttonActive: React.CSSProperties = {
   backgroundColor: colors.bgActive,
   color: colors.accent,
 };
 
-/** Disabled state for buttons */
 export const buttonDisabled: React.CSSProperties = {
   opacity: 0.3,
   cursor: 'not-allowed',
 };
 
-/** Base styles for text/number inputs (dark bg, rounded, light text) — Inspector variant */
 export const inputBase: React.CSSProperties = {
   width: '100%',
   height: 30,
   border: `1px solid ${colors.borderLight}`,
   borderRadius: 8,
-  backgroundColor: colors.bgSecondary,
+  backgroundColor: colors.bg,
   color: colors.text,
   fontSize: 12,
   padding: '0 10px',
@@ -118,13 +125,12 @@ export const inputBase: React.CSSProperties = {
   boxSizing: 'border-box' as const,
 };
 
-/** Base styles for select dropdowns — Inspector variant */
 export const selectBase: React.CSSProperties = {
   width: '100%',
   height: 30,
   border: `1px solid ${colors.borderLight}`,
   borderRadius: 8,
-  backgroundColor: colors.bgSecondary,
+  backgroundColor: colors.bg,
   color: colors.text,
   fontSize: 12,
   padding: '0 8px',
@@ -132,19 +138,17 @@ export const selectBase: React.CSSProperties = {
   boxSizing: 'border-box' as const,
 };
 
-/** Base styles for dialog inputs — ExportDialog variant (uses borderMedium + bgTertiary) */
 export const dialogInputBase: React.CSSProperties = {
   width: '100%',
   height: 36,
   border: `1px solid ${colors.borderMedium}`,
   borderRadius: 6,
-  backgroundColor: colors.bgTertiary,
+  backgroundColor: colors.bg,
   color: colors.text,
   fontSize: 13,
   padding: '0 8px',
 };
 
-/** Section label style (uppercase, small, muted — used in Inspector, Sidebar, WidgetLibrary, Templates, ColorPicker) */
 export const sectionLabel: React.CSSProperties = {
   color: colors.textMuted,
   fontSize: 10,
@@ -153,21 +157,18 @@ export const sectionLabel: React.CSSProperties = {
   letterSpacing: '1px',
 };
 
-/** Panel/section container background (dark panels like Inspector, Sidebar rail, AIChat, TextToolbar) */
 export const panelBg: React.CSSProperties = {
   backgroundColor: colors.bg,
 };
 
-/** Card style (bgSecondary with borderLight — used in WidgetLibrary, Templates) */
 export const cardBase: React.CSSProperties = {
-  backgroundColor: colors.bgSecondary,
+  backgroundColor: colors.bg,
   border: `1px solid ${colors.borderLight}`,
   borderRadius: 10,
   cursor: 'pointer',
   transition: 'all 0.12s',
 };
 
-/** Overlay backdrop for modals/dialogs */
 export const overlayBase: React.CSSProperties = {
   position: 'fixed',
   top: 0,
@@ -179,33 +180,29 @@ export const overlayBase: React.CSSProperties = {
   justifyContent: 'center',
 };
 
-/** Modal/dialog container */
 export const modalBase: React.CSSProperties = {
-  backgroundColor: colors.bgSecondary,
+  backgroundColor: colors.bg,
   borderRadius: 12,
   border: `1px solid ${colors.borderModal}`,
   overflow: 'hidden',
 };
 
-/** Primary CTA button (gradient bg, dark text) */
 export const primaryButton: React.CSSProperties = {
   border: 'none',
   borderRadius: 8,
   background: gradients.accent,
-  color: colors.bg,
+  color: '#ffffff',
   fontSize: 12,
   fontWeight: 600,
   cursor: 'pointer',
 };
 
-/** Vertical divider used in toolbars */
 export const divider: React.CSSProperties = {
   width: 1,
   backgroundColor: colors.borderLight,
   flexShrink: 0,
 };
 
-// Re-export for convenience so consumers can do: import { theme } from './theme'
 export const theme = {
   colors,
   gradients,

@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react';
-import { useSelection, useElements, usePages } from '@reactcanvas/react';
+import React, { useCallback, useState } from 'react';
+import { useSelection, useElements, usePages, useDataSources } from '@reactcanvas/react';
 import type { CanvasElement, ShapeElement, LineElement, ChartElement, KPIElement, TableElement, ProgressElement, EmbedElement, ImageElement, Fill, Shadow } from '@reactcanvas/core';
 import { isSolidFill, isLinearGradient, isRadialGradient, isGradientFill } from '@reactcanvas/core';
 import { FILTER_PRESETS, applyFilterPreset } from '@reactcanvas/images';
@@ -206,6 +206,7 @@ const INSPECTOR_REGISTRY: Record<string, React.FC<{ element: any }>> = {
   embed: EmbedInspector as React.FC<{ element: any }>,
   image: ImageInspector as React.FC<{ element: any }>,
   line: LineInspector as React.FC<{ element: any }>,
+  filterControl: FilterControlInspector as React.FC<{ element: any }>,
 };
 
 function TypeSpecificInspector({ element }: { element: CanvasElement }) {
@@ -333,14 +334,14 @@ function ShapeInspector({ element }: { element: ShapeElement }) {
   const handleFillTypeChange = (newType: string) => {
     let newFill: Fill;
     if (newType === 'solid') {
-      newFill = { type: 'solid', color: '#89b4fa' };
+      newFill = { type: 'solid', color: '#4A90D9' };
     } else if (newType === 'linear-gradient') {
       newFill = {
         type: 'linear-gradient',
         angle: 135,
         stops: [
-          { offset: 0, color: '#89b4fa' },
-          { offset: 1, color: '#cba6f7' },
+          { offset: 0, color: '#4A90D9' },
+          { offset: 1, color: '#7c5cbf' },
         ],
       };
     } else {
@@ -350,8 +351,8 @@ function ShapeInspector({ element }: { element: ShapeElement }) {
         centerY: 0.5,
         radius: 0.5,
         stops: [
-          { offset: 0, color: '#89b4fa' },
-          { offset: 1, color: '#cba6f7' },
+          { offset: 0, color: '#4A90D9' },
+          { offset: 1, color: '#7c5cbf' },
         ],
       };
     }
@@ -647,6 +648,37 @@ function NumberInput({
 
 function ChartInspector({ element }: { element: ChartElement }) {
   const { updateElement } = useElements();
+  const [showDataEditor, setShowDataEditor] = useState(false);
+  const [csvInput, setCsvInput] = useState('');
+
+  const handleCsvImport = useCallback(() => {
+    if (!csvInput.trim()) return;
+    const lines = csvInput.trim().split('\n').map((l) => l.split(/[,\t]/));
+    if (lines.length < 2) return;
+
+    const headers = lines[0];
+    const hasMultipleSeries = headers.length > 2;
+
+    if (hasMultipleSeries) {
+      // Multi-series: first column = labels, rest = series
+      const labels = lines.slice(1).map((row) => row[0]?.trim() || '');
+      const series = headers.slice(1).map((name, colIdx) => ({
+        name: name.trim(),
+        data: lines.slice(1).map((row) => parseFloat(row[colIdx + 1]) || 0),
+      }));
+      updateElement(element.id, { labels, series, data: [] } as Partial<CanvasElement>);
+    } else {
+      // Single series: label, value
+      const data = lines.slice(1).map((row) => ({
+        label: row[0]?.trim() || '',
+        value: parseFloat(row[1]) || 0,
+      }));
+      updateElement(element.id, { data, labels: undefined, series: undefined } as Partial<CanvasElement>);
+    }
+    setCsvInput('');
+    setShowDataEditor(false);
+  }, [csvInput, element.id, updateElement]);
+
   return (
     <>
       <PropertyGroup label="Chart">
@@ -656,11 +688,22 @@ function ChartInspector({ element }: { element: ChartElement }) {
             onChange={(e) => updateElement(element.id, { chartType: e.target.value } as Partial<CanvasElement>)}
             style={styles.select}
           >
-            <option value="bar">Bar</option>
-            <option value="line">Line</option>
-            <option value="area">Area</option>
-            <option value="pie">Pie</option>
-            <option value="donut">Donut</option>
+            <optgroup label="Standard">
+              <option value="bar">Bar</option>
+              <option value="line">Line</option>
+              <option value="area">Area</option>
+              <option value="pie">Pie</option>
+              <option value="donut">Donut</option>
+            </optgroup>
+            <optgroup label="Advanced">
+              <option value="horizontalBar">Horizontal Bar</option>
+              <option value="stackedBar">Stacked Bar</option>
+              <option value="scatter">Scatter</option>
+              <option value="radar">Radar</option>
+              <option value="funnel">Funnel</option>
+              <option value="treemap">Treemap</option>
+              <option value="heatmap">Heatmap</option>
+            </optgroup>
           </select>
         </PropertyRow>
         <PropertyRow label="Title">
@@ -669,6 +712,13 @@ function ChartInspector({ element }: { element: ChartElement }) {
             value={element.title}
             onChange={(e) => updateElement(element.id, { title: e.target.value } as Partial<CanvasElement>)}
             style={styles.numberInput}
+          />
+        </PropertyRow>
+        <PropertyRow label="Legend">
+          <input
+            type="checkbox"
+            checked={element.showLegend}
+            onChange={(e) => updateElement(element.id, { showLegend: e.target.checked } as Partial<CanvasElement>)}
           />
         </PropertyRow>
         <PropertyRow label="Labels">
@@ -686,6 +736,86 @@ function ChartInspector({ element }: { element: ChartElement }) {
           />
         </PropertyRow>
       </PropertyGroup>
+
+      {/* Data Editor */}
+      <PropertyGroup label="Data">
+        {/* Inline data display */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+          {element.data.map((d, i) => (
+            <div key={i} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <input
+                type="text"
+                value={d.label}
+                onChange={(e) => {
+                  const newData = [...element.data];
+                  newData[i] = { ...newData[i], label: e.target.value };
+                  updateElement(element.id, { data: newData } as Partial<CanvasElement>);
+                }}
+                style={{ ...styles.numberInput, flex: 1, fontSize: 11 }}
+                placeholder="Label"
+              />
+              <input
+                type="number"
+                value={d.value}
+                onChange={(e) => {
+                  const newData = [...element.data];
+                  newData[i] = { ...newData[i], value: parseFloat(e.target.value) || 0 };
+                  updateElement(element.id, { data: newData } as Partial<CanvasElement>);
+                }}
+                style={{ ...styles.numberInput, width: 60, fontSize: 11 }}
+              />
+              <button
+                onClick={() => {
+                  const newData = element.data.filter((_, j) => j !== i);
+                  updateElement(element.id, { data: newData } as Partial<CanvasElement>);
+                }}
+                style={{ ...styles.miniBtn, color: '#e03131' }}
+                title="Remove"
+              >
+                x
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={() => {
+              const newData = [...element.data, { label: `Item ${element.data.length + 1}`, value: 50 }];
+              updateElement(element.id, { data: newData } as Partial<CanvasElement>);
+            }}
+            style={styles.addDataBtn}
+          >
+            + Add Row
+          </button>
+        </div>
+
+        {/* CSV Import */}
+        <button
+          onClick={() => setShowDataEditor(!showDataEditor)}
+          style={styles.csvToggleBtn}
+        >
+          {showDataEditor ? 'Hide CSV Import' : 'Import CSV / Paste Data'}
+        </button>
+        {showDataEditor && (
+          <div style={{ marginTop: 6 }}>
+            <textarea
+              value={csvInput}
+              onChange={(e) => setCsvInput(e.target.value)}
+              placeholder={"Label,Value\nQ1,65\nQ2,85\nQ3,45\n\nOr multi-series:\nMonth,Sales,Costs\nJan,100,80\nFeb,120,85"}
+              style={styles.csvTextarea}
+              rows={6}
+            />
+            <button
+              onClick={handleCsvImport}
+              style={styles.csvImportBtn}
+            >
+              Apply Data
+            </button>
+          </div>
+        )}
+      </PropertyGroup>
+
+      {/* Data Source Binding */}
+      <DataSourceBindingSection element={element} />
+
       <PropertyGroup label="Background">
         <ColorPicker
           color={element.backgroundColor}
@@ -702,6 +832,68 @@ function ChartInspector({ element }: { element: ChartElement }) {
         </PropertyRow>
       </PropertyGroup>
     </>
+  );
+}
+
+/** Reusable data source binding section for any widget inspector */
+function DataSourceBindingSection({ element }: { element: CanvasElement }) {
+  const { updateElement } = useElements();
+  const { sources, fetchDataSource } = useDataSources();
+  const boundSourceId = element.dataSource?.dataSourceId;
+  const boundSource = boundSourceId ? sources.find((s: any) => s.id === boundSourceId) : null;
+
+  return (
+    <PropertyGroup label="Live Data">
+      {boundSource ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ flex: 1, fontSize: 11, color: '#50C878', fontWeight: 500 }}>
+              Connected: {boundSource.name}
+            </div>
+            <button
+              onClick={() => updateElement(element.id, { dataSource: undefined } as Partial<CanvasElement>)}
+              style={styles.miniBtn}
+              title="Disconnect"
+            >
+              x
+            </button>
+          </div>
+          <button
+            onClick={() => fetchDataSource(boundSourceId!)}
+            style={styles.csvToggleBtn}
+          >
+            Refresh Data
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {sources.length === 0 ? (
+            <div style={{ fontSize: 10, color: '#868e96', lineHeight: 1.4 }}>
+              No data sources configured. Open the Data Sources panel to add one.
+            </div>
+          ) : (
+            <select
+              value=""
+              onChange={(e) => {
+                if (e.target.value) {
+                  updateElement(element.id, {
+                    dataSource: { dataSourceId: e.target.value },
+                  } as Partial<CanvasElement>);
+                  // Trigger immediate fetch
+                  fetchDataSource(e.target.value);
+                }
+              }}
+              style={styles.select}
+            >
+              <option value="">Connect a data source...</option>
+              {sources.map((s: any) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+    </PropertyGroup>
   );
 }
 
@@ -762,6 +954,7 @@ function KPIInspector({ element }: { element: KPIElement }) {
           />
         </PropertyRow>
       </PropertyGroup>
+      <DataSourceBindingSection element={element} />
       <PropertyGroup label="Colors">
         <ColorPicker color={element.backgroundColor} label="Bg" onChange={(c) => updateElement(element.id, { backgroundColor: c } as Partial<CanvasElement>)} />
         <ColorPicker color={element.valueColor} label="Value" onChange={(c) => updateElement(element.id, { valueColor: c } as Partial<CanvasElement>)} />
@@ -773,6 +966,30 @@ function KPIInspector({ element }: { element: KPIElement }) {
 
 function TableInspector({ element }: { element: TableElement }) {
   const { updateElement } = useElements();
+  const [showCfEditor, setShowCfEditor] = useState(false);
+  const rules = (element as any).conditionalFormats ?? [];
+
+  const addRule = useCallback(() => {
+    const newRule = {
+      id: `cf-${Date.now()}`,
+      columnIndex: 0,
+      operator: 'contains',
+      value: '',
+      backgroundColor: '#ebfbee',
+      textColor: '#2b8a3e',
+    };
+    updateElement(element.id, { conditionalFormats: [...rules, newRule] } as Partial<CanvasElement>);
+  }, [element.id, rules, updateElement]);
+
+  const updateRule = useCallback((idx: number, partial: Record<string, any>) => {
+    const updated = rules.map((r: any, i: number) => i === idx ? { ...r, ...partial } : r);
+    updateElement(element.id, { conditionalFormats: updated } as Partial<CanvasElement>);
+  }, [element.id, rules, updateElement]);
+
+  const removeRule = useCallback((idx: number) => {
+    updateElement(element.id, { conditionalFormats: rules.filter((_: any, i: number) => i !== idx) } as Partial<CanvasElement>);
+  }, [element.id, rules, updateElement]);
+
   return (
     <>
       <PropertyGroup label="Table Style">
@@ -792,11 +1009,115 @@ function TableInspector({ element }: { element: TableElement }) {
             max={50}
           />
         </PropertyRow>
+        <PropertyRow label="Page Size">
+          <NumberInput
+            value={(element as any).pageSize ?? 0}
+            onChange={(v) => updateElement(element.id, { pageSize: v } as Partial<CanvasElement>)}
+            min={0}
+            max={100}
+          />
+        </PropertyRow>
+        <div style={{ fontSize: 9, color: '#868e96', marginBottom: 6 }}>0 = show all rows. Set to 5-10 for pagination.</div>
         <ColorPicker color={element.headerBg} label="Header Bg" onChange={(c) => updateElement(element.id, { headerBg: c } as Partial<CanvasElement>)} />
         <ColorPicker color={element.headerColor} label="Header Txt" onChange={(c) => updateElement(element.id, { headerColor: c } as Partial<CanvasElement>)} />
         <ColorPicker color={element.rowBg} label="Row Bg" onChange={(c) => updateElement(element.id, { rowBg: c } as Partial<CanvasElement>)} />
         <ColorPicker color={element.altRowBg} label="Alt Row" onChange={(c) => updateElement(element.id, { altRowBg: c } as Partial<CanvasElement>)} />
       </PropertyGroup>
+
+      {/* Conditional Formatting */}
+      <PropertyGroup label="Conditional Formatting">
+        <button
+          onClick={() => setShowCfEditor(!showCfEditor)}
+          style={styles.csvToggleBtn}
+        >
+          {showCfEditor ? 'Hide Rules' : `${rules.length} Rule${rules.length !== 1 ? 's' : ''} — Edit`}
+        </button>
+        {showCfEditor && (
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {rules.map((rule: any, idx: number) => (
+              <div key={rule.id} style={{ padding: 8, border: '1px solid #dee2e6', borderRadius: 6, backgroundColor: '#f8f9fa' }}>
+                <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                  <select
+                    value={rule.columnIndex}
+                    onChange={(e) => updateRule(idx, { columnIndex: parseInt(e.target.value) })}
+                    style={{ ...styles.select, flex: 1, height: 26, fontSize: 10 }}
+                  >
+                    <option value={-1}>All Columns</option>
+                    {element.headers.map((h: string, i: number) => (
+                      <option key={i} value={i}>{h}</option>
+                    ))}
+                  </select>
+                  <button onClick={() => removeRule(idx)} style={{ ...styles.miniBtn, color: '#e03131' }}>x</button>
+                </div>
+                <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                  <select
+                    value={rule.operator}
+                    onChange={(e) => updateRule(idx, { operator: e.target.value })}
+                    style={{ ...styles.select, flex: 1, height: 26, fontSize: 10 }}
+                  >
+                    <option value="contains">Contains</option>
+                    <option value="equals">Equals</option>
+                    <option value="notEquals">Not Equals</option>
+                    <option value="greaterThan">Greater Than</option>
+                    <option value="lessThan">Less Than</option>
+                    <option value="between">Between</option>
+                    <option value="isEmpty">Is Empty</option>
+                    <option value="isNotEmpty">Is Not Empty</option>
+                  </select>
+                </div>
+                {!['isEmpty', 'isNotEmpty'].includes(rule.operator) && (
+                  <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                    <input
+                      type="text"
+                      value={rule.value}
+                      onChange={(e) => updateRule(idx, { value: e.target.value })}
+                      placeholder="Value"
+                      style={{ ...styles.numberInput, flex: 1, height: 26, fontSize: 10 }}
+                    />
+                    {rule.operator === 'between' && (
+                      <input
+                        type="text"
+                        value={rule.value2 || ''}
+                        onChange={(e) => updateRule(idx, { value2: e.target.value })}
+                        placeholder="Max"
+                        style={{ ...styles.numberInput, flex: 1, height: 26, fontSize: 10 }}
+                      />
+                    )}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  <span style={{ fontSize: 9, color: '#868e96', width: 22 }}>Bg:</span>
+                  <input
+                    type="color"
+                    value={rule.backgroundColor || '#ebfbee'}
+                    onChange={(e) => updateRule(idx, { backgroundColor: e.target.value })}
+                    style={{ width: 24, height: 20, border: '1px solid #dee2e6', borderRadius: 3, padding: 0, cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: 9, color: '#868e96', width: 22 }}>Txt:</span>
+                  <input
+                    type="color"
+                    value={rule.textColor || '#2b8a3e'}
+                    onChange={(e) => updateRule(idx, { textColor: e.target.value })}
+                    style={{ width: 24, height: 20, border: '1px solid #dee2e6', borderRadius: 3, padding: 0, cursor: 'pointer' }}
+                  />
+                  <input
+                    type="text"
+                    value={rule.icon || ''}
+                    onChange={(e) => updateRule(idx, { icon: e.target.value })}
+                    placeholder="Icon"
+                    style={{ ...styles.numberInput, width: 40, height: 22, fontSize: 10, textAlign: 'center' }}
+                  />
+                </div>
+              </div>
+            ))}
+            <button onClick={addRule} style={styles.addDataBtn}>
+              + Add Rule
+            </button>
+          </div>
+        )}
+      </PropertyGroup>
+
+      <DataSourceBindingSection element={element} />
     </>
   );
 }
@@ -861,6 +1182,7 @@ function ProgressInspector({ element }: { element: ProgressElement }) {
         <ColorPicker color={element.trackColor} label="Track" onChange={(c) => updateElement(element.id, { trackColor: c } as Partial<CanvasElement>)} />
         <ColorPicker color={element.backgroundColor} label="Bg" onChange={(c) => updateElement(element.id, { backgroundColor: c } as Partial<CanvasElement>)} />
       </PropertyGroup>
+      <DataSourceBindingSection element={element} />
     </>
   );
 }
@@ -903,6 +1225,66 @@ function EmbedInspector({ element }: { element: EmbedElement }) {
             type="checkbox"
             checked={element.showBorder}
             onChange={(e) => updateElement(element.id, { showBorder: e.target.checked } as Partial<CanvasElement>)}
+          />
+        </PropertyRow>
+      </PropertyGroup>
+    </>
+  );
+}
+
+function FilterControlInspector({ element }: { element: any }) {
+  const { updateElement } = useElements();
+  return (
+    <>
+      <PropertyGroup label="Filter Control">
+        <PropertyRow label="Type">
+          <select
+            value={element.controlType}
+            onChange={(e) => updateElement(element.id, { controlType: e.target.value } as Partial<CanvasElement>)}
+            style={styles.select}
+          >
+            <option value="dropdown">Dropdown</option>
+            <option value="search">Search</option>
+            <option value="dateRange">Date Range</option>
+          </select>
+        </PropertyRow>
+        <PropertyRow label="Label">
+          <input
+            type="text"
+            value={element.label}
+            onChange={(e) => updateElement(element.id, { label: e.target.value } as Partial<CanvasElement>)}
+            style={styles.numberInput}
+          />
+        </PropertyRow>
+        <PropertyRow label="Field">
+          <input
+            type="text"
+            value={element.filterField}
+            onChange={(e) => updateElement(element.id, { filterField: e.target.value } as Partial<CanvasElement>)}
+            style={styles.numberInput}
+            placeholder="e.g. category, status"
+          />
+        </PropertyRow>
+        {element.controlType === 'dropdown' && (
+          <PropertyRow label="Options">
+            <input
+              type="text"
+              value={(element.options || []).join(', ')}
+              onChange={(e) => {
+                const options = e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean);
+                updateElement(element.id, { options } as Partial<CanvasElement>);
+              }}
+              style={styles.numberInput}
+              placeholder="Option 1, Option 2, ..."
+            />
+          </PropertyRow>
+        )}
+        <PropertyRow label="Placeholder">
+          <input
+            type="text"
+            value={element.placeholder}
+            onChange={(e) => updateElement(element.id, { placeholder: e.target.value } as Partial<CanvasElement>)}
+            style={styles.numberInput}
           />
         </PropertyRow>
       </PropertyGroup>
@@ -1014,24 +1396,24 @@ function PageAlignButton({ label, icon, onClick }: { label: string; icon: string
 const styles: Record<string, React.CSSProperties> = {
   inspector: {
     width: 280,
-    backgroundColor: '#16161e',
-    borderLeft: '1px solid #1e1e2e',
+    backgroundColor: '#ffffff',
+    borderLeft: '1px solid #f8f9fa',
     overflow: 'auto',
     height: '100%',
   },
   sectionHeader: {
     padding: '14px 16px 10px',
-    color: '#cdd6f4',
+    color: '#212529',
     fontSize: 13,
     fontWeight: 600,
-    borderBottom: '1px solid #1e1e2e',
+    borderBottom: '1px solid #f8f9fa',
   },
   propertyGroup: {
     padding: '12px 16px',
-    borderBottom: '1px solid #1e1e2e',
+    borderBottom: '1px solid #f8f9fa',
   },
   groupLabel: {
-    color: '#585878',
+    color: '#868e96',
     fontSize: 10,
     fontWeight: 700,
     textTransform: 'uppercase' as const,
@@ -1046,7 +1428,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
   },
   propertyLabel: {
-    color: '#585878',
+    color: '#868e96',
     fontSize: 11,
     fontWeight: 500,
     minWidth: 60,
@@ -1060,10 +1442,10 @@ const styles: Record<string, React.CSSProperties> = {
   numberInput: {
     width: '100%',
     height: 30,
-    border: '1px solid #2a2a3a',
+    border: '1px solid #dee2e6',
     borderRadius: 8,
-    backgroundColor: '#1e1e2e',
-    color: '#cdd6f4',
+    backgroundColor: '#f8f9fa',
+    color: '#212529',
     fontSize: 12,
     padding: '0 10px',
     outline: 'none',
@@ -1073,10 +1455,10 @@ const styles: Record<string, React.CSSProperties> = {
   flipBtn: {
     width: 30,
     height: 26,
-    border: '1px solid #2a2a3a',
+    border: '1px solid #dee2e6',
     borderRadius: 6,
-    backgroundColor: '#1e1e2e',
-    color: '#8888a8',
+    backgroundColor: '#f8f9fa',
+    color: '#495057',
     fontSize: 14,
     cursor: 'pointer',
     display: 'flex',
@@ -1085,26 +1467,26 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 0,
   },
   flipBtnActive: {
-    backgroundColor: '#2a2a44',
-    color: '#89b4fa',
-    borderColor: '#89b4fa',
+    backgroundColor: '#e7f0ff',
+    color: '#4A90D9',
+    borderColor: '#4A90D9',
   },
   colorInput: {
     width: 34,
     height: 30,
-    border: '1px solid #2a2a3a',
+    border: '1px solid #dee2e6',
     borderRadius: 8,
-    backgroundColor: '#1e1e2e',
+    backgroundColor: '#f8f9fa',
     cursor: 'pointer',
     padding: 3,
   },
   select: {
     width: '100%',
     height: 30,
-    border: '1px solid #2a2a3a',
+    border: '1px solid #dee2e6',
     borderRadius: 8,
-    backgroundColor: '#1e1e2e',
-    color: '#cdd6f4',
+    backgroundColor: '#f8f9fa',
+    color: '#212529',
     fontSize: 12,
     padding: '0 8px',
     outline: 'none',
@@ -1112,10 +1494,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   slider: {
     flex: 1,
-    accentColor: '#89b4fa',
+    accentColor: '#4A90D9',
   },
   sliderValue: {
-    color: '#585878',
+    color: '#868e96',
     fontSize: 11,
     fontWeight: 500,
     minWidth: 30,
@@ -1128,10 +1510,10 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     width: 52,
     height: 38,
-    border: '1px solid #2a2a3a',
+    border: '1px solid #dee2e6',
     borderRadius: 6,
-    backgroundColor: '#1e1e2e',
-    color: '#8888a8',
+    backgroundColor: '#f8f9fa',
+    color: '#495057',
     cursor: 'pointer',
     padding: 0,
     gap: 1,
@@ -1139,11 +1521,74 @@ const styles: Record<string, React.CSSProperties> = {
   resetButton: {
     width: '100%',
     height: 30,
-    border: '1px solid #2a2a3a',
+    border: '1px solid #dee2e6',
     borderRadius: 8,
-    backgroundColor: '#1e1e2e',
-    color: '#cdd6f4',
+    backgroundColor: '#f8f9fa',
+    color: '#212529',
     fontSize: 12,
+    cursor: 'pointer',
+    marginTop: 6,
+  },
+  miniBtn: {
+    width: 22,
+    height: 22,
+    border: '1px solid #dee2e6',
+    borderRadius: 4,
+    backgroundColor: '#f8f9fa',
+    fontSize: 11,
+    fontWeight: 600,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
+    flexShrink: 0,
+  },
+  addDataBtn: {
+    width: '100%',
+    height: 28,
+    border: '1px dashed #dee2e6',
+    borderRadius: 6,
+    backgroundColor: 'transparent',
+    color: '#868e96',
+    fontSize: 11,
+    cursor: 'pointer',
+    marginTop: 4,
+  },
+  csvToggleBtn: {
+    width: '100%',
+    height: 28,
+    border: '1px solid #dee2e6',
+    borderRadius: 6,
+    backgroundColor: '#f8f9fa',
+    color: '#4A90D9',
+    fontSize: 11,
+    fontWeight: 500,
+    cursor: 'pointer',
+  },
+  csvTextarea: {
+    width: '100%',
+    minHeight: 80,
+    border: '1px solid #dee2e6',
+    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
+    color: '#212529',
+    fontSize: 11,
+    fontFamily: 'monospace',
+    padding: 8,
+    outline: 'none',
+    resize: 'vertical' as const,
+    boxSizing: 'border-box' as const,
+  },
+  csvImportBtn: {
+    width: '100%',
+    height: 28,
+    border: 'none',
+    borderRadius: 6,
+    background: 'linear-gradient(135deg, #4A90D9, #7c5cbf)',
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: 600,
     cursor: 'pointer',
     marginTop: 6,
   },
@@ -1196,10 +1641,10 @@ function AlignmentTools({ elements, updateElements }: {
   const btnStyle: React.CSSProperties = {
     width: 30,
     height: 28,
-    border: '1px solid #2a2a3a',
+    border: '1px solid #dee2e6',
     borderRadius: 6,
-    backgroundColor: '#1e1e2e',
-    color: '#8888a8',
+    backgroundColor: '#f8f9fa',
+    color: '#495057',
     fontSize: 13,
     cursor: 'pointer',
     display: 'flex',
@@ -1210,7 +1655,7 @@ function AlignmentTools({ elements, updateElements }: {
 
   return (
     <div style={{ padding: '0 14px 10px' }}>
-      <div style={{ color: '#585878', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '1px', marginBottom: 6 }}>
+      <div style={{ color: '#868e96', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '1px', marginBottom: 6 }}>
         Align
       </div>
       <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>

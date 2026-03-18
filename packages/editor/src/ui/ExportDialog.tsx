@@ -1,8 +1,9 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import type { Document } from '@reactcanvas/core';
-import { useEditor } from '@reactcanvas/react';
+import { useEditor, usePages } from '@reactcanvas/react';
 import { exportToJson, downloadString, downloadBlob } from '@reactcanvas/export';
 import html2canvas from 'html2canvas';
+import { pageDataToCSV, downloadCSV, downloadExcel } from '../utils/dataExport';
 
 export interface ExportDialogProps {
   isOpen: boolean;
@@ -16,12 +17,16 @@ export interface ExportDialogProps {
 
 export function ExportDialog({ isOpen, onClose, canvasRef, onImageUpload, onImport }: ExportDialogProps) {
   const { document } = useEditor();
+  const { activePage } = usePages();
   const [format, setFormat] = useState('png');
   const [quality, setQuality] = useState(0.92);
   const [dpi, setDpi] = useState(72);
   const [isExporting, setIsExporting] = useState(false);
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [embedExpanded, setEmbedExpanded] = useState(false);
+  const [embedTab, setEmbedTab] = useState<'react' | 'html'>('react');
+  const [embedCopied, setEmbedCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImportClick = useCallback(() => {
@@ -72,6 +77,59 @@ export function ExportDialog({ isOpen, onClose, canvasRef, onImageUpload, onImpo
       if (format === 'json') {
         const json = exportToJson(document.pages);
         downloadString(json, `${document.name}.json`, 'application/json');
+        onClose();
+        return;
+      }
+
+      if (format === 'csv') {
+        const elements = activePage?.elements ?? [];
+        const csvContent = pageDataToCSV(elements);
+        downloadCSV(csvContent, `${document.name}.csv`);
+        onClose();
+        return;
+      }
+
+      if (format === 'excel') {
+        const elements = activePage?.elements ?? [];
+        const csvContent = pageDataToCSV(elements);
+        downloadExcel(csvContent, `${document.name}.csv`);
+        onClose();
+        return;
+      }
+
+      if (format === 'pdf') {
+        const target = canvasRef.current;
+        if (!target) {
+          console.error('Canvas ref not available');
+          return;
+        }
+        const pdfScale = dpi / 72;
+        const pdfCanvas = await html2canvas(target, {
+          scale: pdfScale,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: null,
+          logging: false,
+        });
+        const imgDataUrl = pdfCanvas.toDataURL('image/png');
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(`<!DOCTYPE html>
+<html>
+<head><title>${document.name}</title>
+<style>
+  @media print { body { margin: 0; } img { width: 100%; height: auto; } }
+  body { margin: 0; display: flex; justify-content: center; align-items: flex-start; }
+  img { max-width: 100%; height: auto; }
+</style>
+</head>
+<body>
+  <img src="${imgDataUrl}" />
+  <script>window.onload = function() { window.print(); }</script>
+</body>
+</html>`);
+          printWindow.document.close();
+        }
         onClose();
         return;
       }
@@ -135,7 +193,57 @@ export function ExportDialog({ isOpen, onClose, canvasRef, onImageUpload, onImpo
     } finally {
       setIsExporting(false);
     }
-  }, [format, quality, dpi, canvasRef, document, onClose, onImageUpload]);
+  }, [format, quality, dpi, canvasRef, document, onClose, onImageUpload, activePage]);
+
+  const reactEmbedCode = useMemo(() => {
+    return `import { DashboardViewer } from '@reactcanvas/editor';
+
+// Option 1: Static (pass document directly)
+<DashboardViewer document={dashboardDoc} interactive width="100%" height="600px" />
+
+// Option 2: Fetch from your API
+<DashboardViewer
+  document={fallbackDoc}
+  documentUrl="https://your-api.com/dashboards/${document.id}"
+  token="your-auth-token"
+  interactive={true}
+  width="100%"
+  height="600px"
+/>
+
+// Option 3: Real-time (SSE from your API)
+<DashboardViewer
+  document={fallbackDoc}
+  documentUrl="https://your-api.com/dashboards/${document.id}"
+  streamUrl="https://your-api.com/dashboards/${document.id}/stream"
+  token="your-auth-token"
+  interactive={true}
+  width="100%"
+  height="600px"
+/>`;
+  }, [document]);
+
+  const htmlEmbedCode = useMemo(() => {
+    return `<div id="dashboard" style="width:100%;height:600px;"></div>
+<script src="https://unpkg.com/@reactcanvas/editor/dist/embed.js"></script>
+<script>
+  DashboardEmbed.render({
+    target: '#dashboard',
+    documentUrl: 'https://your-api.com/dashboards/${document.id}',
+    // streamUrl: 'https://your-api.com/dashboards/${document.id}/stream', // for real-time
+    // token: 'your-auth-token', // if authenticated
+    interactive: true,
+  });
+</script>`;
+  }, [document]);
+
+  const handleCopyEmbed = useCallback(() => {
+    const code = embedTab === 'react' ? reactEmbedCode : htmlEmbedCode;
+    navigator.clipboard.writeText(code).then(() => {
+      setEmbedCopied(true);
+      setTimeout(() => setEmbedCopied(false), 2000);
+    });
+  }, [embedTab, reactEmbedCode, htmlEmbedCode]);
 
   if (!isOpen) return null;
 
@@ -160,11 +268,14 @@ export function ExportDialog({ isOpen, onClose, canvasRef, onImageUpload, onImpo
               <option value="png">PNG Image</option>
               <option value="jpg">JPG Image</option>
               <option value="svg">SVG (embedded raster)</option>
+              <option value="pdf">PDF (print)</option>
               <option value="json">JSON Document</option>
+              <option value="csv">CSV Data (all widgets)</option>
+              <option value="excel">Excel Data (.csv)</option>
             </select>
           </div>
 
-          {format !== 'json' && (
+          {format !== 'json' && format !== 'csv' && format !== 'excel' && (
             <div style={styles.field}>
               <label style={styles.label}>DPI</label>
               <select
@@ -209,7 +320,7 @@ export function ExportDialog({ isOpen, onClose, canvasRef, onImageUpload, onImpo
               Import JSON
             </button>
             {importError && (
-              <span style={{ color: '#f38ba8', fontSize: 12, marginTop: 4, display: 'block' }}>
+              <span style={{ color: '#e03131', fontSize: 12, marginTop: 4, display: 'block' }}>
                 {importError}
               </span>
             )}
@@ -233,6 +344,46 @@ export function ExportDialog({ isOpen, onClose, canvasRef, onImageUpload, onImpo
               />
             </div>
           )}
+
+          {/* Get Embed Code */}
+          <div style={styles.embedSection}>
+            <button
+              style={styles.embedToggle}
+              onClick={() => setEmbedExpanded(!embedExpanded)}
+            >
+              <span>{embedExpanded ? '\u25BC' : '\u25B6'} Get Embed Code</span>
+            </button>
+            {embedExpanded && (
+              <div style={styles.embedBody}>
+                <div style={styles.embedTabs}>
+                  <button
+                    style={{
+                      ...styles.embedTabBtn,
+                      ...(embedTab === 'react' ? styles.embedTabBtnActive : {}),
+                    }}
+                    onClick={() => { setEmbedTab('react'); setEmbedCopied(false); }}
+                  >
+                    React
+                  </button>
+                  <button
+                    style={{
+                      ...styles.embedTabBtn,
+                      ...(embedTab === 'html' ? styles.embedTabBtnActive : {}),
+                    }}
+                    onClick={() => { setEmbedTab('html'); setEmbedCopied(false); }}
+                  >
+                    HTML
+                  </button>
+                </div>
+                <pre style={styles.embedCode}>
+                  {embedTab === 'react' ? reactEmbedCode : htmlEmbedCode}
+                </pre>
+                <button style={styles.embedCopyBtn} onClick={handleCopyEmbed}>
+                  {embedCopied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div style={styles.footer}>
@@ -266,9 +417,9 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 1000,
   },
   dialog: {
-    backgroundColor: '#1e1e2e',
+    backgroundColor: '#f8f9fa',
     borderRadius: 12,
-    border: '1px solid #313244',
+    border: '1px solid #f1f3f5',
     width: 400,
     maxWidth: '90vw',
     overflow: 'hidden',
@@ -278,10 +429,10 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '16px 20px',
-    borderBottom: '1px solid #313244',
+    borderBottom: '1px solid #f1f3f5',
   },
   title: {
-    color: '#cdd6f4',
+    color: '#212529',
     fontSize: 16,
     fontWeight: 600,
     margin: 0,
@@ -289,7 +440,7 @@ const styles: Record<string, React.CSSProperties> = {
   closeButton: {
     background: 'none',
     border: 'none',
-    color: '#6c7086',
+    color: '#adb5bd',
     fontSize: 16,
     cursor: 'pointer',
   },
@@ -301,7 +452,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   label: {
     display: 'block',
-    color: '#a6adc8',
+    color: '#6c757d',
     fontSize: 12,
     fontWeight: 500,
     marginBottom: 6,
@@ -309,15 +460,15 @@ const styles: Record<string, React.CSSProperties> = {
   select: {
     width: '100%',
     height: 36,
-    border: '1px solid #45475a',
+    border: '1px solid #e9ecef',
     borderRadius: 6,
-    backgroundColor: '#313244',
-    color: '#cdd6f4',
+    backgroundColor: '#f1f3f5',
+    color: '#212529',
     fontSize: 13,
     padding: '0 8px',
   },
   qualityValue: {
-    color: '#6c7086',
+    color: '#adb5bd',
     fontSize: 12,
     marginTop: 4,
     display: 'block',
@@ -325,10 +476,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   infoBox: {
     padding: '10px 12px',
-    backgroundColor: 'rgba(137, 180, 250, 0.1)',
-    border: '1px solid rgba(137, 180, 250, 0.2)',
+    backgroundColor: 'rgba(74, 144, 217, 0.1)',
+    border: '1px solid rgba(74, 144, 217, 0.2)',
     borderRadius: 8,
-    color: '#89b4fa',
+    color: '#4A90D9',
     fontSize: 12,
     lineHeight: 1.4,
     marginBottom: 16,
@@ -336,10 +487,10 @@ const styles: Record<string, React.CSSProperties> = {
   urlInput: {
     width: '100%',
     height: 36,
-    border: '1px solid #45475a',
+    border: '1px solid #e9ecef',
     borderRadius: 6,
-    backgroundColor: '#313244',
-    color: '#50C878',
+    backgroundColor: '#f1f3f5',
+    color: '#2b8a3e',
     fontSize: 12,
     padding: '0 8px',
     boxSizing: 'border-box' as const,
@@ -350,15 +501,15 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'flex-end',
     gap: 8,
     padding: '16px 20px',
-    borderTop: '1px solid #313244',
+    borderTop: '1px solid #f1f3f5',
   },
   cancelButton: {
     height: 36,
     padding: '0 16px',
-    border: '1px solid #45475a',
+    border: '1px solid #e9ecef',
     borderRadius: 6,
     backgroundColor: 'transparent',
-    color: '#cdd6f4',
+    color: '#212529',
     fontSize: 13,
     cursor: 'pointer',
   },
@@ -367,8 +518,8 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0 20px',
     border: 'none',
     borderRadius: 6,
-    backgroundColor: '#89b4fa',
-    color: '#1e1e2e',
+    backgroundColor: '#4A90D9',
+    color: '#ffffff',
     fontSize: 13,
     fontWeight: 600,
     cursor: 'pointer',
@@ -376,12 +527,83 @@ const styles: Record<string, React.CSSProperties> = {
   importButton: {
     width: '100%',
     height: 36,
-    border: '1px dashed #45475a',
+    border: '1px dashed #e9ecef',
     borderRadius: 6,
     backgroundColor: 'transparent',
-    color: '#a6adc8',
+    color: '#6c757d',
     fontSize: 13,
     cursor: 'pointer',
     transition: 'border-color 0.15s, color 0.15s',
+  },
+  embedSection: {
+    borderTop: '1px solid #e9ecef',
+    paddingTop: 12,
+    marginTop: 4,
+  },
+  embedToggle: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    background: 'none',
+    border: 'none',
+    color: '#495057',
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: 'pointer',
+    padding: '4px 0',
+    width: '100%',
+    textAlign: 'left' as const,
+  },
+  embedBody: {
+    marginTop: 10,
+  },
+  embedTabs: {
+    display: 'flex',
+    gap: 0,
+    marginBottom: 8,
+  },
+  embedTabBtn: {
+    flex: 1,
+    height: 30,
+    border: '1px solid #dee2e6',
+    backgroundColor: '#f1f3f5',
+    color: '#6c757d',
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+  },
+  embedTabBtnActive: {
+    backgroundColor: '#4A90D9',
+    borderColor: '#4A90D9',
+    color: '#ffffff',
+    fontWeight: 600,
+  },
+  embedCode: {
+    backgroundColor: '#1e1e1e',
+    color: '#d4d4d4',
+    padding: 12,
+    borderRadius: 6,
+    fontSize: 10,
+    lineHeight: 1.5,
+    overflow: 'auto',
+    maxHeight: 180,
+    whiteSpace: 'pre-wrap' as const,
+    wordBreak: 'break-all' as const,
+    margin: 0,
+    fontFamily: 'Menlo, Monaco, Consolas, monospace',
+  },
+  embedCopyBtn: {
+    marginTop: 8,
+    width: '100%',
+    height: 32,
+    border: '1px solid #dee2e6',
+    borderRadius: 6,
+    backgroundColor: '#ffffff',
+    color: '#495057',
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
   },
 };

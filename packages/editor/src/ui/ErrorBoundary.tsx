@@ -54,8 +54,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             justifyContent: 'center',
             width: '100%',
             height: '100%',
-            backgroundColor: '#16161e',
-            color: '#cdd6f4',
+            backgroundColor: '#ffffff',
+            color: '#212529',
             fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             padding: 32,
             textAlign: 'center',
@@ -64,7 +64,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12 }}>
             Something went wrong
           </h2>
-          <p style={{ fontSize: 14, color: '#a6adc8', marginBottom: 24, maxWidth: 400 }}>
+          <p style={{ fontSize: 14, color: '#6c757d', marginBottom: 24, maxWidth: 400 }}>
             {this.state.error?.message || 'An unexpected error occurred.'}
           </p>
           {canRetry ? (
@@ -74,9 +74,9 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                 padding: '10px 24px',
                 fontSize: 14,
                 fontWeight: 500,
-                color: '#cdd6f4',
-                backgroundColor: '#1e1e2e',
-                border: '1px solid #2a2a3a',
+                color: '#212529',
+                backgroundColor: '#f8f9fa',
+                border: '1px solid #dee2e6',
                 borderRadius: 8,
                 cursor: 'pointer',
               }}
@@ -84,7 +84,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               Try Again
             </button>
           ) : (
-            <p style={{ fontSize: 13, color: '#585878' }}>
+            <p style={{ fontSize: 13, color: '#868e96' }}>
               This error keeps recurring. Please reload the page.
             </p>
           )}

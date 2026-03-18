@@ -14,6 +14,8 @@ export interface BaseElement {
   name: string;
   flipX?: boolean;
   flipY?: boolean;
+  // Data source binding — connects this widget to a live data source
+  dataSource?: DataSourceBinding;
 }
 
 // Shape fill types
@@ -145,7 +147,7 @@ export interface SVGElement extends BaseElement {
 }
 
 // Chart element types
-export type ChartType = 'bar' | 'line' | 'pie' | 'donut' | 'area';
+export type ChartType = 'bar' | 'line' | 'pie' | 'donut' | 'area' | 'scatter' | 'radar' | 'horizontalBar' | 'stackedBar' | 'funnel' | 'heatmap' | 'treemap';
 
 export interface ChartDataPoint {
   label: string;
@@ -153,14 +155,35 @@ export interface ChartDataPoint {
   color?: string;
 }
 
+export interface ChartDataSeries {
+  name: string;
+  data: number[];
+  color?: string;
+}
+
+export interface HeatmapCell {
+  row: string;
+  col: string;
+  value: number;
+}
+
 export interface ChartElement extends BaseElement {
   type: 'chart';
   chartType: ChartType;
   data: ChartDataPoint[];
+  // Multi-series support
+  labels?: string[];
+  series?: ChartDataSeries[];
+  // Heatmap-specific
+  heatmapData?: HeatmapCell[];
+  heatmapRows?: string[];
+  heatmapCols?: string[];
   title: string;
   showLegend: boolean;
   showLabels: boolean;
   showGrid: boolean;
+  showTooltips: boolean;
+  animated: boolean;
   colors: string[];
   backgroundColor: string;
   borderRadius: number;
@@ -185,6 +208,24 @@ export interface KPIElement extends BaseElement {
   icon: string;
 }
 
+// Conditional formatting rules
+export type ConditionalOperator = 'equals' | 'notEquals' | 'contains' | 'greaterThan' | 'lessThan' | 'between' | 'isEmpty' | 'isNotEmpty';
+
+export interface ConditionalFormatRule {
+  id: string;
+  /** Column index to evaluate (or -1 for entire row) */
+  columnIndex: number;
+  operator: ConditionalOperator;
+  value: string;
+  /** For 'between' operator */
+  value2?: string;
+  /** Styling to apply when rule matches */
+  backgroundColor?: string;
+  textColor?: string;
+  fontWeight?: 'normal' | 'bold';
+  icon?: string; // emoji or symbol prefix
+}
+
 // Table element
 export interface TableElement extends BaseElement {
   type: 'table';
@@ -198,6 +239,14 @@ export interface TableElement extends BaseElement {
   borderColor: string;
   borderRadius: number;
   fontSize: number;
+  // Sorting
+  sortColumn?: number;
+  sortDirection?: 'asc' | 'desc';
+  // Pagination
+  pageSize?: number; // 0 or undefined = show all
+  currentPage?: number;
+  // Conditional formatting
+  conditionalFormats?: ConditionalFormatRule[];
 }
 
 // Progress / Gauge element
@@ -229,6 +278,63 @@ export interface EmbedElement extends BaseElement {
   showBorder: boolean;
 }
 
+// Filter Control element (dropdown, date range, search box)
+export type FilterControlType = 'dropdown' | 'dateRange' | 'search';
+
+export interface FilterControlElement extends BaseElement {
+  type: 'filterControl';
+  controlType: FilterControlType;
+  /** The field name this control filters on */
+  filterField: string;
+  /** Label shown above the control */
+  label: string;
+  /** For dropdown: list of options. Empty = auto-detect from data */
+  options: string[];
+  /** Current selected value(s) */
+  selectedValues: string[];
+  /** For dateRange: start and end dates */
+  dateStart?: string;
+  dateEnd?: string;
+  /** For search: placeholder text */
+  placeholder: string;
+  /** Styling */
+  backgroundColor: string;
+  borderRadius: number;
+}
+
+// ─── Calculated Fields ──────────────────────────────────────────────
+
+export type AggregationType = 'sum' | 'avg' | 'count' | 'min' | 'max' | 'median';
+
+export interface CalculatedField {
+  id: string;
+  name: string;
+  /** 'aggregate' applies an aggregation function to a field */
+  /** 'formula' applies a custom expression: e.g. "revenue - cost" */
+  type: 'aggregate' | 'formula';
+  /** For aggregate: source field + function */
+  sourceField?: string;
+  aggregation?: AggregationType;
+  /** For formula: expression string */
+  expression?: string;
+}
+
+// ─── Cross-Widget Filters ───────────────────────────────────────────
+
+export interface DashboardFilter {
+  id: string;
+  /** Element that created this filter (the chart that was clicked) */
+  sourceElementId: string;
+  /** Human-readable label for the filter pill */
+  label: string;
+  /** The field name being filtered on */
+  field: string;
+  /** The value to match */
+  value: string;
+  /** Page the filter applies to */
+  pageId: string;
+}
+
 // Union of all element types
 export type CanvasElement =
   | ShapeElement
@@ -242,7 +348,8 @@ export type CanvasElement =
   | KPIElement
   | TableElement
   | ProgressElement
-  | EmbedElement;
+  | EmbedElement
+  | FilterControlElement;
 
 // Page model
 export interface Page {
@@ -256,12 +363,71 @@ export interface Page {
   notes: string;
 }
 
+// ─── Data Sources ───────────────────────────────────────────────────
+
+export type AuthType = 'none' | 'bearer' | 'apiKey' | 'basic';
+
+export interface DataSourceAuth {
+  type: AuthType;
+  // Bearer: token goes in 'token'
+  token?: string;
+  // API Key: header name + value
+  headerName?: string;
+  headerValue?: string;
+  // Basic: username + password
+  username?: string;
+  password?: string;
+}
+
+export interface DataSourceHeader {
+  key: string;
+  value: string;
+  enabled: boolean;
+}
+
+export interface FieldMapping {
+  // For chart: which field is the label, which is the value
+  labelField?: string;
+  valueField?: string;
+  // For multi-series: group-by field
+  seriesField?: string;
+  // For table: which fields become columns (ordered)
+  columnFields?: string[];
+  // For KPI: which field is the metric
+  metricField?: string;
+  // JSONPath-like accessor to reach the data array in the response
+  dataPath?: string;
+}
+
+export interface DataSource {
+  id: string;
+  name: string;
+  url: string;
+  method: 'GET' | 'POST';
+  headers: DataSourceHeader[];
+  auth: DataSourceAuth;
+  body?: string; // POST body (JSON string)
+  refreshInterval: number; // seconds, 0 = manual only
+  fieldMapping: FieldMapping;
+  calculatedFields?: CalculatedField[];
+  lastFetched?: string; // ISO timestamp
+  lastError?: string;
+}
+
+// Base element gets optional data source binding
+export interface DataSourceBinding {
+  dataSourceId: string;
+  // Override field mapping at the widget level
+  fieldMapping?: Partial<FieldMapping>;
+}
+
 // Root document model
 export interface Document {
   id: string;
   name: string;
   schemaVersion: number;
   pages: Page[];
+  dataSources?: DataSource[];
   createdAt: string;
   updatedAt: string;
 }

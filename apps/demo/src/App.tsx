@@ -311,7 +311,14 @@ function buildDashboardDocument(): Document {
         ['NexaPoint', 'Business', '$9,700', 'Monitor', 'Apr 2027'],
       ],
       fontSize: 13,
-    }),
+      pageSize: 5,
+      conditionalFormats: [
+        { id: 'cf-1', columnIndex: 3, operator: 'equals', value: 'Healthy', backgroundColor: '#ebfbee', textColor: '#2b8a3e', icon: '\u2713' },
+        { id: 'cf-2', columnIndex: 3, operator: 'equals', value: 'At Risk', backgroundColor: '#fff9db', textColor: '#e67700', icon: '\u26A0' },
+        { id: 'cf-3', columnIndex: 3, operator: 'equals', value: 'Churning', backgroundColor: '#fff5f5', textColor: '#e03131', icon: '\u2717' },
+        { id: 'cf-4', columnIndex: 3, operator: 'equals', value: 'Monitor', backgroundColor: '#e7f0ff', textColor: '#4A90D9', icon: '\u25CB' },
+      ],
+    } as any),
   );
 
   // Progress indicators
@@ -420,43 +427,43 @@ function AISettingsModal({ onClose }: { onClose: () => void }) {
 
 const settingsStyles: Record<string, React.CSSProperties> = {
   overlay: {
-    position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)',
+    position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000,
   },
   modal: {
-    backgroundColor: '#1e1e2e', border: '1px solid #313244', borderRadius: 12,
-    padding: 24, width: 380, maxWidth: '90vw',
+    backgroundColor: '#ffffff', border: '1px solid #dee2e6', borderRadius: 12,
+    padding: 24, width: 380, maxWidth: '90vw', boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
   },
   title: {
-    color: '#cdd6f4', fontSize: 16, fontWeight: 600, marginBottom: 20,
+    color: '#212529', fontSize: 16, fontWeight: 600, marginBottom: 20,
   },
   field: { marginBottom: 16 },
   label: {
-    display: 'block', color: '#a6adc8', fontSize: 12, fontWeight: 500, marginBottom: 6,
+    display: 'block', color: '#6c757d', fontSize: 12, fontWeight: 500, marginBottom: 6,
   },
   providerRow: { display: 'flex', gap: 8 },
   providerBtn: {
-    flex: 1, padding: '8px 12px', border: '1px solid #313244', borderRadius: 8,
-    backgroundColor: '#16161e', color: '#a6adc8', fontSize: 12, cursor: 'pointer',
+    flex: 1, padding: '8px 12px', border: '1px solid #dee2e6', borderRadius: 8,
+    backgroundColor: '#f8f9fa', color: '#6c757d', fontSize: 12, cursor: 'pointer',
     transition: 'all 0.15s',
   },
   providerBtnActive: {
-    borderColor: '#89b4fa', color: '#89b4fa', backgroundColor: 'rgba(137,180,250,0.1)',
+    borderColor: '#4A90D9', color: '#4A90D9', backgroundColor: 'rgba(74,144,217,0.08)',
   },
   input: {
-    width: '100%', padding: '8px 12px', border: '1px solid #313244', borderRadius: 8,
-    backgroundColor: '#16161e', color: '#cdd6f4', fontSize: 13, outline: 'none',
+    width: '100%', padding: '8px 12px', border: '1px solid #dee2e6', borderRadius: 8,
+    backgroundColor: '#f8f9fa', color: '#212529', fontSize: 13, outline: 'none',
     boxSizing: 'border-box' as const,
   },
-  hint: { color: '#585878', fontSize: 11, marginTop: 4 },
+  hint: { color: '#868e96', fontSize: 11, marginTop: 4 },
   actions: { display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 },
   cancelBtn: {
-    padding: '8px 16px', border: '1px solid #313244', borderRadius: 8,
-    backgroundColor: 'transparent', color: '#a6adc8', fontSize: 12, cursor: 'pointer',
+    padding: '8px 16px', border: '1px solid #dee2e6', borderRadius: 8,
+    backgroundColor: 'transparent', color: '#6c757d', fontSize: 12, cursor: 'pointer',
   },
   saveBtn: {
     padding: '8px 20px', border: 'none', borderRadius: 8,
-    background: 'linear-gradient(135deg, #89b4fa, #cba6f7)', color: '#16161e',
+    background: 'linear-gradient(135deg, #4A90D9, #7c5cbf)', color: '#ffffff',
     fontSize: 12, fontWeight: 600, cursor: 'pointer',
   },
 };
@@ -525,30 +532,30 @@ function App() {
           bottom: 16,
           right: 120,
           padding: '8px 16px',
-          backgroundColor: '#313244',
-          color: '#cdd6f4',
-          border: '1px solid #45475a',
+          backgroundColor: '#ffffff',
+          color: '#495057',
+          border: '1px solid #dee2e6',
           borderRadius: 8,
           fontSize: 12,
           fontWeight: 500,
           cursor: 'pointer',
           zIndex: 999,
-          opacity: 0.8,
-          transition: 'opacity 0.15s',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+          transition: 'box-shadow 0.15s',
           display: 'flex',
           alignItems: 'center',
           gap: 6,
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-        onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.8')}
+        onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)')}
+        onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.08)')}
         title="Configure AI provider and API key"
       >
         <span style={{ fontSize: 14 }}>AI</span>
         <span style={{
           padding: '1px 6px',
           borderRadius: 4,
-          backgroundColor: getProvider() === 'openai' ? 'rgba(16,163,127,0.2)' : 'rgba(137,180,250,0.2)',
-          color: getProvider() === 'openai' ? '#10a37f' : '#89b4fa',
+          backgroundColor: getProvider() === 'openai' ? 'rgba(16,163,127,0.1)' : 'rgba(74,144,217,0.1)',
+          color: getProvider() === 'openai' ? '#10a37f' : '#4A90D9',
           fontSize: 10,
           fontWeight: 600,
         }}>
@@ -562,19 +569,19 @@ function App() {
           bottom: 16,
           right: 16,
           padding: '8px 16px',
-          backgroundColor: '#313244',
-          color: '#cdd6f4',
-          border: '1px solid #45475a',
+          backgroundColor: '#ffffff',
+          color: '#495057',
+          border: '1px solid #dee2e6',
           borderRadius: 8,
           fontSize: 12,
           fontWeight: 500,
           cursor: 'pointer',
           zIndex: 999,
-          opacity: 0.8,
-          transition: 'opacity 0.15s',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+          transition: 'box-shadow 0.15s',
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-        onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.8')}
+        onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)')}
+        onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.08)')}
         title="Clear saved data and reload with default dashboard"
       >
         Reset Demo

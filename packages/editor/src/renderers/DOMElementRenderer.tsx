@@ -1,8 +1,10 @@
-import React, { memo, useCallback, useRef, useEffect } from 'react';
+import React, { memo, useCallback, useRef, useEffect, useMemo } from 'react';
 import DOMPurify from 'dompurify';
-import type { CanvasElement, ShapeElement, TextElement, ImageElement, LineElement, ChartElement, KPIElement, TableElement, ProgressElement, EmbedElement } from '@reactcanvas/core';
+import type { CanvasElement, ShapeElement, TextElement, ImageElement, LineElement, ChartElement, KPIElement, TableElement, ProgressElement, EmbedElement, FilterControlElement } from '@reactcanvas/core';
 import { isSolidFill, isLinearGradient, isRadialGradient } from '@reactcanvas/core';
 import { ChartContent, KPIContent, TableContent, ProgressContent, EmbedContent } from './WidgetRenderers';
+import type { ChartFilterEvent } from './WidgetRenderers';
+import { FilterControlContent } from './FilterControlRenderer';
 
 interface DOMElementRendererProps {
   element: CanvasElement;
@@ -18,6 +20,12 @@ interface DOMElementRendererProps {
   onAutoResize?: (id: string, height: number) => void;
   onTextContentChange?: (id: string, content: string) => void;
   onTextEditComplete?: () => void;
+  /** Active filter values for cross-widget filtering */
+  activeFilterValues?: Set<string>;
+  /** Called when a chart data point is clicked to create a filter */
+  onFilterClick?: (event: ChartFilterEvent) => void;
+  /** Called when a filter control value changes */
+  onFilterControlChange?: (elementId: string, field: string, values: string[], label: string) => void;
 }
 
 const HANDLE_SIZE = 10;
@@ -56,6 +64,9 @@ export const DOMElementRenderer = memo(function DOMElementRenderer({
   onAutoResize,
   onTextContentChange,
   onTextEditComplete,
+  activeFilterValues,
+  onFilterClick,
+  onFilterControlChange,
 }: DOMElementRendererProps) {
   const elRef = useRef<HTMLDivElement>(null);
 
@@ -81,10 +92,30 @@ export const DOMElementRenderer = memo(function DOMElementRenderer({
     return () => observer.disconnect();
   }, [element.id, element.type, element.height, onAutoResize]);
 
+  // For chart/table widgets that are already selected, allow clicks through
+  // to Chart.js canvas so data point click filtering works
+  const isInteractiveWidget = element.type === 'chart' || element.type === 'table' || element.type === 'filterControl';
+
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       // When editing text, let clicks go to the contentEditable
       if (isEditing) return;
+
+      // If this is an already-selected interactive widget, let the click
+      // pass through to the Chart.js canvas for filter interactions
+      if (isInteractiveWidget && isSelected) {
+        // Still select on shift-click for multi-select
+        if (e.shiftKey) {
+          e.stopPropagation();
+          e.preventDefault();
+          onSelect(element.id, true);
+          return;
+        }
+        // Don't prevent default or start drag — let Chart.js handle the click
+        e.stopPropagation();
+        return;
+      }
+
       e.stopPropagation();
       e.preventDefault();
       onSelect(element.id, e.shiftKey);
@@ -92,7 +123,7 @@ export const DOMElementRenderer = memo(function DOMElementRenderer({
         onDragStart(element.id, e);
       }
     },
-    [element.id, element.locked, isEditing, onSelect, onDragStart]
+    [element.id, element.locked, isEditing, isSelected, isInteractiveWidget, onSelect, onDragStart]
   );
 
   const preventNativeDrag = useCallback((e: React.DragEvent) => {
@@ -160,7 +191,7 @@ export const DOMElementRenderer = memo(function DOMElementRenderer({
           onEditComplete={onTextEditComplete}
         />
       ) : (
-        <ElementContent element={element} />
+        <ElementContent element={element} activeFilterValues={activeFilterValues} onFilterClick={onFilterClick} onFilterControlChange={onFilterControlChange} />
       )}
 
       {/* Selection handles — hide when editing text */}
@@ -232,22 +263,34 @@ export const DOMElementRenderer = memo(function DOMElementRenderer({
 });
 
 // Renders non-text element content
-const ElementContent = memo(function ElementContent({ element }: { element: CanvasElement }) {
+const ElementContent = memo(function ElementContent({
+  element,
+  activeFilterValues,
+  onFilterClick,
+  onFilterControlChange,
+}: {
+  element: CanvasElement;
+  activeFilterValues?: Set<string>;
+  onFilterClick?: (event: ChartFilterEvent) => void;
+  onFilterControlChange?: (elementId: string, field: string, values: string[], label: string) => void;
+}) {
   switch (element.type) {
     case 'shape':
       return <ShapeContent element={element as ShapeElement} />;
     case 'image':
       return <ImageContent element={element as ImageElement} />;
     case 'chart':
-      return <ChartContent element={element as ChartElement} />;
+      return <ChartContent element={element as ChartElement} activeFilterValues={activeFilterValues} onFilterClick={onFilterClick} />;
     case 'kpi':
       return <KPIContent element={element as KPIElement} />;
     case 'table':
-      return <TableContent element={element as TableElement} />;
+      return <TableContent element={element as TableElement} activeFilterValues={activeFilterValues} />;
     case 'progress':
       return <ProgressContent element={element as ProgressElement} />;
     case 'embed':
       return <EmbedContent element={element as EmbedElement} />;
+    case 'filterControl':
+      return <FilterControlContent element={element as FilterControlElement} onFilterChange={onFilterControlChange} />;
     case 'line':
       return <LineContent element={element as LineElement} />;
     case 'group':
@@ -256,7 +299,7 @@ const ElementContent = memo(function ElementContent({ element }: { element: Canv
           <div style={{
             position: 'absolute',
             inset: 0,
-            border: '1px dashed rgba(137, 180, 250, 0.3)',
+            border: '1px dashed rgba(74, 144, 217, 0.3)',
             borderRadius: 4,
             pointerEvents: 'none',
           }} />
@@ -303,7 +346,7 @@ function TextContent({
     }
     return { color: '#000000' };
   })();
-  const hasHtml = /<[a-z][\s\S]*>/i.test(element.content);
+  const hasHtml = useMemo(() => /<[a-z][\s\S]*>/i.test(element.content), [element.content]);
 
   // Focus when entering edit mode — place cursor at end instead of selecting all
   useEffect(() => {

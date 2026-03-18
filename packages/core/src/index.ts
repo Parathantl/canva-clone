@@ -28,6 +28,7 @@ export {
   createTableElement,
   createProgressElement,
   createEmbedElement,
+  createFilterControlElement,
   DEFAULT_CHART_COLORS,
 } from './factories/DocumentFactory';
 
@@ -41,3 +42,21 @@ export {
   isRadialGradient,
   isGradientFill,
 } from './utils/typeGuards';
+
+// Document Population (for backend data injection)
+export { populateDocument, populateDocumentById, getWidgetNames } from './utils/populateDocument';
+
+// Filters
+export { FilterManager } from './filters/FilterManager';
+
+// Data Sources
+export {
+  DataSourceManager,
+  createDataSource,
+  extractData,
+  mapDataToChart,
+  mapDataToTable,
+  mapDataToKPI,
+} from './datasource/DataSourceManager';
+export type { FetchResult } from './datasource/DataSourceManager';
+export { applyCalculatedFields, computeAggregateValue } from './datasource/CalculatedFields';

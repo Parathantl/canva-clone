@@ -18,7 +18,7 @@ const MAX_FONT_SIZE = 400;
 
 const COLORS = [
   '#000000', '#ffffff', '#ef4444', '#f97316', '#eab308', '#22c55e',
-  '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280', '#1e1e2e', '#cdd6f4',
+  '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280', '#f8f9fa', '#212529',
 ];
 
 const TEXT_ALIGNMENTS: { value: string; label: string; icon: string }[] = [
@@ -286,7 +286,7 @@ export function TextToolbar({ element, isEditing, onUpdate, style }: TextToolbar
               backgroundColor: color,
               borderRadius: 3,
               cursor: 'pointer',
-              border: color.toLowerCase() === displayColor.toLowerCase() ? '2px solid #89b4fa' : '1px solid #45475a',
+              border: color.toLowerCase() === displayColor.toLowerCase() ? '2px solid #4A90D9' : '1px solid #e9ecef',
               boxSizing: 'border-box' as const,
             }}
             onMouseDown={(e) => {
@@ -346,24 +346,24 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: 4,
     padding: '6px 16px',
-    backgroundColor: '#16161e',
-    borderBottom: '1px solid #1e1e2e',
+    backgroundColor: '#ffffff',
+    borderBottom: '1px solid #f8f9fa',
     flexWrap: 'wrap',
     flexShrink: 0,
   },
   divider: {
     width: 1,
     height: 22,
-    backgroundColor: '#45475a',
+    backgroundColor: '#e9ecef',
     margin: '0 3px',
     flexShrink: 0,
   },
   select: {
     height: 28,
-    border: '1px solid #45475a',
+    border: '1px solid #e9ecef',
     borderRadius: 4,
-    backgroundColor: '#313244',
-    color: '#cdd6f4',
+    backgroundColor: '#f1f3f5',
+    color: '#212529',
     fontSize: 12,
     padding: '0 4px',
     outline: 'none',
@@ -378,7 +378,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none',
     borderRadius: 4,
     backgroundColor: 'transparent',
-    color: '#cdd6f4',
+    color: '#212529',
     fontSize: 14,
     cursor: 'pointer',
     fontFamily: 'Georgia, serif',
@@ -386,8 +386,8 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1,
   },
   btnActive: {
-    backgroundColor: '#45475a',
-    color: '#89b4fa',
+    backgroundColor: '#e9ecef',
+    color: '#4A90D9',
   },
   smallBtn: {
     display: 'flex',
@@ -398,7 +398,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none',
     borderRadius: 4,
     backgroundColor: 'transparent',
-    color: '#cdd6f4',
+    color: '#212529',
     fontSize: 14,
     cursor: 'pointer',
     padding: 0,
@@ -414,7 +414,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 3,
     overflow: 'hidden',
     cursor: 'pointer',
-    border: '1px solid #45475a',
+    border: '1px solid #e9ecef',
   },
   colorPreview: {
     position: 'absolute',
@@ -438,17 +438,17 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 3,
   },
   miniLabel: {
-    color: '#6c7086',
+    color: '#adb5bd',
     fontSize: 10,
     fontWeight: 600,
     userSelect: 'none',
   },
   miniInput: {
     height: 24,
-    border: '1px solid #45475a',
+    border: '1px solid #e9ecef',
     borderRadius: 4,
-    backgroundColor: '#313244',
-    color: '#cdd6f4',
+    backgroundColor: '#f1f3f5',
+    color: '#212529',
     fontSize: 11,
     padding: '0 4px',
     outline: 'none',

@@ -12,6 +12,7 @@ import type {
   TableElement,
   ProgressElement,
   EmbedElement,
+  FilterControlElement,
   Fill,
   Stroke,
   ImageFilters,
@@ -203,6 +204,8 @@ export function createChartElement(overrides: Partial<ChartElement> = {}): Chart
     showLegend: false,
     showLabels: true,
     showGrid: true,
+    showTooltips: true,
+    animated: true,
     colors: DEFAULT_CHART_COLORS,
     backgroundColor: '#ffffff',
     borderRadius: 12,
@@ -346,6 +349,32 @@ export function createLineElement(overrides: Partial<LineElement> = {}): LineEle
     startArrow: false,
     endArrow: false,
     arrowSize: 10,
+    ...overrides,
+  };
+}
+
+export function createFilterControlElement(overrides: Partial<FilterControlElement> = {}): FilterControlElement {
+  return {
+    id: createId(),
+    type: 'filterControl',
+    name: 'Filter',
+    x: 100,
+    y: 100,
+    width: 240,
+    height: 48,
+    rotation: 0,
+    opacity: 1,
+    locked: false,
+    visible: true,
+    layerOrder: 0,
+    controlType: 'dropdown',
+    filterField: '',
+    label: 'Filter',
+    options: [],
+    selectedValues: [],
+    placeholder: 'Select...',
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
     ...overrides,
   };
 }

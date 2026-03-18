@@ -37,8 +37,8 @@ export function ContextMenu({
         top: y,
         zIndex: 10000,
         minWidth: 200,
-        backgroundColor: '#1e1e2e',
-        border: '1px solid #313244',
+        backgroundColor: '#f8f9fa',
+        border: '1px solid #f1f3f5',
         borderRadius: 10,
         padding: '6px 0',
         boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
@@ -92,7 +92,7 @@ function CtxItem({ label, shortcut, onClick, disabled, danger }: {
         padding: '7px 14px',
         border: 'none',
         backgroundColor: 'transparent',
-        color: disabled ? '#45475a' : danger ? '#E8596D' : '#cdd6f4',
+        color: disabled ? '#e9ecef' : danger ? '#e03131' : '#212529',
         fontSize: 12,
         fontWeight: 500,
         cursor: disabled ? 'default' : 'pointer',
@@ -101,11 +101,11 @@ function CtxItem({ label, shortcut, onClick, disabled, danger }: {
       }}
     >
       <span>{label}</span>
-      {shortcut && <span style={{ color: '#585878', fontSize: 11, marginLeft: 24 }}>{shortcut}</span>}
+      {shortcut && <span style={{ color: '#868e96', fontSize: 11, marginLeft: 24 }}>{shortcut}</span>}
     </button>
   );
 }
 
 function CtxDivider() {
-  return <div style={{ height: 1, backgroundColor: '#313244', margin: '4px 0' }} />;
+  return <div style={{ height: 1, backgroundColor: '#f1f3f5', margin: '4px 0' }} />;
 }

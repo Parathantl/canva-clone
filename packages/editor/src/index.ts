@@ -22,6 +22,10 @@ export type { AIChatProps, AIChatMessage, StreamCallback } from './ui/AIChat';
 export { convertSlidesToDocument, validateSlidePresentation, createSlideTransformer, LLM_SYSTEM_PROMPT } from './utils/slideSchema';
 export type { SlidePresentation, Slide, SlideElement, LLMCaller } from './utils/slideSchema';
 
+// Dashboard Viewer (embeddable read-only component)
+export { DashboardViewer } from './DashboardViewer';
+export type { DashboardViewerProps } from './DashboardViewer';
+
 // Re-export everything from core, react, and plugins for convenience
 export * from '@reactcanvas/core';
 export * from '@reactcanvas/react';

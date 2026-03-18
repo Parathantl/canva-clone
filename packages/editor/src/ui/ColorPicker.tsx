@@ -131,7 +131,7 @@ export function ColorPicker({
                     style={{
                       ...styles.gridSwatch,
                       backgroundColor: c,
-                      outline: color.toLowerCase() === c.toLowerCase() ? '2px solid #89b4fa' : 'none',
+                      outline: color.toLowerCase() === c.toLowerCase() ? '2px solid #4A90D9' : 'none',
                       outlineOffset: 1,
                     }}
                   />
@@ -155,7 +155,7 @@ export function ColorPicker({
                     : undefined,
                   backgroundSize: '6px 6px',
                   backgroundPosition: '0 0, 0 3px, 3px -3px, -3px 0',
-                  outline: color === c ? '2px solid #89b4fa' : 'none',
+                  outline: color === c ? '2px solid #4A90D9' : 'none',
                   outlineOffset: 1,
                 }}
               />
@@ -174,7 +174,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 6,
   },
   label: {
-    color: '#8888a8',
+    color: '#495057',
     fontSize: 11,
     fontWeight: 500,
     minWidth: 40,
@@ -182,10 +182,10 @@ const styles: Record<string, React.CSSProperties> = {
   swatchBtn: {
     width: 24,
     height: 24,
-    border: '1px solid #2a2a3a',
+    border: '1px solid #dee2e6',
     borderRadius: 6,
     padding: 2,
-    backgroundColor: '#1e1e2e',
+    backgroundColor: '#f8f9fa',
     cursor: 'pointer',
     flexShrink: 0,
   },
@@ -197,10 +197,10 @@ const styles: Record<string, React.CSSProperties> = {
   hexInput: {
     flex: 1,
     height: 24,
-    border: '1px solid #2a2a3a',
+    border: '1px solid #dee2e6',
     borderRadius: 6,
-    backgroundColor: '#1e1e2e',
-    color: '#cdd6f4',
+    backgroundColor: '#f8f9fa',
+    color: '#212529',
     fontSize: 11,
     fontFamily: 'JetBrains Mono, monospace',
     padding: '0 6px',
@@ -213,8 +213,8 @@ const styles: Record<string, React.CSSProperties> = {
     left: 0,
     right: 0,
     marginTop: 4,
-    backgroundColor: '#1e1e2e',
-    border: '1px solid #313244',
+    backgroundColor: '#f8f9fa',
+    border: '1px solid #f1f3f5',
     borderRadius: 10,
     padding: 8,
     zIndex: 100,
@@ -226,7 +226,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
     marginBottom: 8,
     paddingBottom: 8,
-    borderBottom: '1px solid #313244',
+    borderBottom: '1px solid #f1f3f5',
   },
   nativeInput: {
     width: 32,
@@ -238,16 +238,16 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: 'transparent',
   },
   nativeLabel: {
-    color: '#8888a8',
+    color: '#495057',
     fontSize: 11,
   },
   eyedropperBtn: {
     width: 24,
     height: 24,
-    border: '1px solid #2a2a3a',
+    border: '1px solid #dee2e6',
     borderRadius: 6,
-    backgroundColor: '#1e1e2e',
-    color: '#8888a8',
+    backgroundColor: '#f8f9fa',
+    color: '#495057',
     fontSize: 12,
     cursor: 'pointer',
     display: 'flex',
@@ -257,7 +257,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginLeft: 'auto',
   },
   sectionLabel: {
-    color: '#585878',
+    color: '#868e96',
     fontSize: 9,
     fontWeight: 700,
     textTransform: 'uppercase' as const,
@@ -272,7 +272,7 @@ const styles: Record<string, React.CSSProperties> = {
   gridSwatch: {
     width: '100%',
     aspectRatio: '1',
-    border: '1px solid #2a2a3a',
+    border: '1px solid #dee2e6',
     borderRadius: 4,
     cursor: 'pointer',
     padding: 0,

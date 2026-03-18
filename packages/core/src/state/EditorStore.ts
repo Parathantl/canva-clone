@@ -81,6 +81,7 @@ function shiftLayerOrder(
 ) {
   const idSet = new Set(elementIds);
   const sorted = [...elements].sort((a, b) => a.layerOrder - b.layerOrder);
+  if (sorted.length === 0) return;
   const isForward = direction === 'forward';
   const start = isForward ? sorted.length - 1 : 0;
   const end = isForward ? -1 : sorted.length;
@@ -144,7 +145,7 @@ export const createEditorStore = (initialDocument?: Document) => {
           if (index === -1 || state.document.pages.length <= 1) return;
           state.document.pages.splice(index, 1);
           if (state.activePageId === pageId) {
-            state.activePageId = state.document.pages[Math.max(0, index - 1)].id;
+            state.activePageId = state.document.pages[Math.max(0, index - 1)]?.id ?? '';
           }
           state.selectedElementIds = [];
           state.document.updatedAt = new Date().toISOString();
@@ -289,7 +290,7 @@ export const createEditorStore = (initialDocument?: Document) => {
         set((state) => {
           const page = activePage(state);
           if (!page) return;
-          const maxOrder = Math.max(...page.elements.map((el) => el.layerOrder));
+          const maxOrder = page.elements.length === 0 ? 0 : Math.max(...page.elements.map((el) => el.layerOrder));
           const idSet = new Set(elementIds);
           let nextOrder = maxOrder + 1;
           for (const el of page.elements) {
@@ -356,7 +357,7 @@ export const createEditorStore = (initialDocument?: Document) => {
             maxY = Math.max(maxY, c.y + c.height);
           }
 
-          const maxOrder = Math.max(...children.map((c) => c.layerOrder));
+          const maxOrder = children.length === 0 ? 0 : Math.max(...children.map((c) => c.layerOrder));
 
           const group: GroupElement = {
             id: groupId,

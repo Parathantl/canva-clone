@@ -1,4 +1,5 @@
 import type { Document, CanvasElement, ChartDataPoint } from '../types/document';
+import { resolveVariables } from './resolveVariables';
 
 /**
  * Populates a dashboard template with live data.
@@ -56,9 +57,10 @@ export function populateDocument(
     trendValue?: string;
     /** For progress: numeric value 0-100 */
   }>,
+  variables?: Record<string, string | number>,
 ): Document {
   // Deep clone to avoid mutating the template
-  const doc: Document = JSON.parse(JSON.stringify(template));
+  let doc: Document = JSON.parse(JSON.stringify(template));
   doc.updatedAt = new Date().toISOString();
 
   for (const page of doc.pages) {
@@ -74,6 +76,11 @@ export function populateDocument(
       if (!merged.id || !merged.type || typeof merged.x !== 'number' || typeof merged.y !== 'number') continue;
       page.elements[i] = merged as CanvasElement;
     }
+  }
+
+  // Resolve {{variable}} placeholders if variables are provided
+  if (variables) {
+    doc = resolveVariables(doc, variables);
   }
 
   return doc;

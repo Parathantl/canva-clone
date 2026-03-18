@@ -1,4 +1,4 @@
-import React, { memo, useMemo, useCallback, useRef } from 'react';
+import { memo, useMemo, useCallback, useRef } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -34,7 +34,7 @@ ChartJS.register(
 );
 
 // Disable all animations globally for better canvas performance
-ChartJS.defaults.animation = false as any;
+ChartJS.defaults.animation = false as const;
 
 interface DatasetEntry {
   label: string;
@@ -56,12 +56,15 @@ export interface ChartJSContentProps {
   activeFilterValues?: Set<string>;
   /** Called when user clicks a data point to create/toggle a filter */
   onFilterClick?: (event: ChartFilterEvent) => void;
+  /** Called when user clicks a data point and drill-down is configured */
+  onDrillDown?: (targetPageId: string, field: string, value: string) => void;
 }
 
 export const ChartJSContent = memo(function ChartJSContent({
   element,
   activeFilterValues,
   onFilterClick,
+  onDrillDown,
 }: ChartJSContentProps) {
   const {
     chartType, data, labels: multiLabels, series,
@@ -95,19 +98,27 @@ export const ChartJSContent = memo(function ChartJSContent({
     };
   }, [data, multiLabels, series, colors, title]);
 
-  // Handle click on chart data points to trigger filtering
+  // Handle click on chart data points to trigger filtering or drill-down
   const handleChartClick = useCallback((_event: ChartEvent, activeElements: ActiveElement[]) => {
-    if (!onFilterClick || activeElements.length === 0) return;
+    if (activeElements.length === 0) return;
     const el = activeElements[0];
     const label = chartLabels[el.index] ?? '';
     if (!label) return;
+
+    // Drill-down navigation takes priority if configured
+    if (element.drillDownPageId && onDrillDown) {
+      onDrillDown(element.drillDownPageId, element.drillDownField || 'label', String(label));
+      return;
+    }
+
+    if (!onFilterClick) return;
     onFilterClick({
       elementId: element.id,
       label: `${title || 'Chart'}: ${label}`,
       field: 'label',
       value: String(label),
     });
-  }, [onFilterClick, chartLabels, element.id, title]);
+  }, [onFilterClick, onDrillDown, chartLabels, element.id, element.drillDownPageId, element.drillDownField, title]);
 
   // Keep a stable ref to the click handler so commonOptions doesn't change every render
   const clickHandlerRef = useRef(handleChartClick);

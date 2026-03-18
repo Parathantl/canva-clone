@@ -1,10 +1,28 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import type { Document, CanvasElement } from '@reactcanvas/core';
-import { EditorProvider, usePages, useViewport, useFilters } from '@reactcanvas/react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useImperativeHandle, forwardRef } from 'react';
+import type { Document, CanvasElement, DashboardFilter } from '@reactcanvas/core';
+import { resolveVariables } from '@reactcanvas/core';
+import { EditorProvider, usePages, useViewport, useFilters, useDataSourceStatus } from '@reactcanvas/react';
 import { createDefaultPlugins } from '@reactcanvas/plugins';
 import { DOMElementRenderer } from './renderers/DOMElementRenderer';
 import { FilterBar } from './ui/FilterBar';
 import type { ChartFilterEvent } from './renderers/WidgetRenderers';
+import { ThemeProvider, useTheme } from './ThemeContext';
+import type { EditorTheme } from './ThemeContext';
+
+export interface DashboardViewerRef {
+  /** Set a filter programmatically */
+  setFilter: (field: string, value: string, label?: string) => void;
+  /** Clear all filters */
+  clearFilters: () => void;
+  /** Navigate to a specific page */
+  goToPage: (index: number) => void;
+  /** Refresh all data sources */
+  refreshData: () => void;
+  /** Get current filters */
+  getFilters: () => DashboardFilter[];
+  /** Get current page index */
+  getCurrentPage: () => number;
+}
 
 export interface DashboardViewerProps {
   /** The document to display (static mode) */
@@ -39,13 +57,30 @@ export interface DashboardViewerProps {
   onDocumentUpdate?: (doc: Document) => void;
   /** Called on connection status change */
   onConnectionChange?: (status: 'connected' | 'disconnected' | 'error') => void;
+
+  // ─── Event callbacks ─────────
+  /** Called when a filter is applied or removed */
+  onFilterChange?: (filters: DashboardFilter[]) => void;
+  /** Called when page changes */
+  onPageChange?: (pageIndex: number, pageName: string) => void;
+  /** Called when any widget is clicked */
+  onWidgetClick?: (elementId: string, elementType: string, elementName: string) => void;
+
+  // ─── Dashboard Variables ─────────
+  /** Values for {{variable}} placeholders in the document */
+  variables?: Record<string, string | number>;
+
+  // ─── Theming ─────────
+  /** Theme customization — pass partial overrides to change colors, fonts, and styling */
+  theme?: Partial<EditorTheme>;
 }
 
 /** Read-only dashboard viewer — no editing, no toolbar, no inspector.
  *  Supports real-time sync via documentUrl + streamUrl props. */
-export function DashboardViewer(props: DashboardViewerProps) {
+export const DashboardViewer = forwardRef<DashboardViewerRef, DashboardViewerProps>(function DashboardViewer(props, ref) {
   const plugins = useMemo(() => createDefaultPlugins(), []);
   const [liveDoc, setLiveDoc] = useState<Document>(props.document);
+  const innerRef = useRef<DashboardViewerRef>(null);
 
   const fetchHeaders = useMemo(() => {
     const h: Record<string, string> = { 'Accept': 'application/json' };
@@ -118,21 +153,45 @@ export function DashboardViewer(props: DashboardViewerProps) {
     if (!props.documentUrl) setLiveDoc(props.document);
   }, [props.document, props.documentUrl]);
 
+  // Forward the ref: delegate to inner component's imperative handle
+  useImperativeHandle(ref, () => ({
+    setFilter: (field, value, label) => innerRef.current?.setFilter(field, value, label),
+    clearFilters: () => innerRef.current?.clearFilters(),
+    goToPage: (index) => innerRef.current?.goToPage(index),
+    refreshData: () => {
+      // Re-fetch from documentUrl if available
+      if (props.documentUrl) {
+        fetch(props.documentUrl, { headers: fetchHeaders })
+          .then((r) => r.ok ? r.json() : null)
+          .then((doc) => { if (doc) { setLiveDoc(doc); props.onDocumentUpdate?.(doc); } })
+          .catch(() => {});
+      }
+    },
+    getFilters: () => innerRef.current?.getFilters() ?? [],
+    getCurrentPage: () => innerRef.current?.getCurrentPage() ?? 0,
+  }), [props.documentUrl, fetchHeaders]);
+
+  // Resolve {{variable}} placeholders before passing to the provider
+  const resolvedDoc = useMemo(() => {
+    return props.variables ? resolveVariables(liveDoc, props.variables) : liveDoc;
+  }, [liveDoc, props.variables]);
+
   return (
-    <EditorProvider initialDocument={liveDoc} plugins={plugins} key={liveDoc.id + (liveDoc.updatedAt || '')}>
-      <DashboardViewerInner {...props} document={liveDoc} />
-    </EditorProvider>
+    <ThemeProvider theme={props.theme}>
+      <EditorProvider initialDocument={resolvedDoc} plugins={plugins} key={resolvedDoc.id + (resolvedDoc.updatedAt || '')}>
+        <DashboardViewerInner ref={innerRef} {...props} document={resolvedDoc} />
+      </EditorProvider>
+    </ThemeProvider>
   );
-}
+});
 
 // No-op handlers for DOMElementRenderer (read-only mode)
-const noop = () => {};
 const noopStr = (_id: string) => {};
 const noopStrBool = (_id: string, _b: boolean) => {};
 const noopStrStr = (_id: string, _h: string, _e: React.MouseEvent) => {};
 const noopStrMouse = (_id: string, _e: React.MouseEvent) => {};
 
-function DashboardViewerInner({
+const DashboardViewerInner = forwardRef<DashboardViewerRef, DashboardViewerProps>(function DashboardViewerInner({
   document: _doc,
   pageIndex = 0,
   interactive = true,
@@ -142,10 +201,15 @@ function DashboardViewerInner({
   showPageNav = true,
   className,
   style,
-}: DashboardViewerProps) {
+  onFilterChange,
+  onPageChange,
+  onWidgetClick,
+}, ref) {
   const { pages, setActivePage } = usePages();
-  const { zoom, panX, panY, setZoom, setPan, zoomToFit } = useViewport();
+  const { zoom, panX, panY, zoomToFit } = useViewport();
   const { filters, toggleFilter, addFilter, removeFilter, clearAll, filterManager } = useFilters();
+  const theme = useTheme();
+  const { statusMap: dataSourceStatusMap, retryFetch: retryDataSourceFetch } = useDataSourceStatus();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -163,6 +227,44 @@ function DashboardViewerInner({
   }, [currentPageIndex, pages, setActivePage]);
 
   const activePage = pages[currentPageIndex] ?? pages[0];
+
+  // Fire onPageChange callback when page changes
+  useEffect(() => {
+    const page = pages[currentPageIndex];
+    if (page) {
+      onPageChange?.(currentPageIndex, page.name || `Page ${currentPageIndex + 1}`);
+    }
+  }, [currentPageIndex, pages, onPageChange]);
+
+  // Fire onFilterChange callback when filters change
+  useEffect(() => {
+    onFilterChange?.(filters);
+  }, [filters, onFilterChange]);
+
+  // Expose imperative API via ref
+  useImperativeHandle(ref, () => ({
+    setFilter: (field: string, value: string, label?: string) => {
+      addFilter({
+        sourceElementId: 'programmatic',
+        label: label ?? `${field}: ${value}`,
+        field,
+        value,
+      });
+    },
+    clearFilters: () => {
+      clearAll();
+    },
+    goToPage: (index: number) => {
+      if (index >= 0 && index < pages.length) {
+        setCurrentPageIndex(index);
+      }
+    },
+    refreshData: () => {
+      // Handled by the outer component
+    },
+    getFilters: () => filters,
+    getCurrentPage: () => currentPageIndex,
+  }), [addFilter, clearAll, pages.length, filters, currentPageIndex]);
 
   // ResizeObserver for auto-fit
   useEffect(() => {
@@ -202,6 +304,8 @@ function DashboardViewerInner({
   }, [filters]);
 
   const handleFilterClick = useCallback((event: ChartFilterEvent) => {
+    // Always fire onWidgetClick when a chart element is clicked
+    onWidgetClick?.(event.elementId, 'chart', event.label);
     if (!interactive) return;
     toggleFilter({
       sourceElementId: event.elementId,
@@ -209,7 +313,7 @@ function DashboardViewerInner({
       field: event.field,
       value: event.value,
     });
-  }, [interactive, toggleFilter]);
+  }, [interactive, toggleFilter, onWidgetClick]);
 
   const handleFilterControlChange = useCallback((elementId: string, field: string, values: string[], label: string) => {
     if (!interactive) return;
@@ -228,6 +332,24 @@ function DashboardViewerInner({
     removeFilter(filterId);
   }, [removeFilter]);
 
+  // Handle drill-down navigation: navigate to target page and apply filter
+  const handleDrillDown = useCallback((targetPageId: string, field: string, value: string) => {
+    // 1. Navigate to the target page
+    const targetIndex = pages.findIndex((p) => p.id === targetPageId);
+    if (targetIndex >= 0) {
+      setCurrentPageIndex(targetIndex);
+    }
+    // 2. Apply filter on the target page
+    filterManager.clearPageFilters(targetPageId);
+    filterManager.addFilter({
+      sourceElementId: 'drill-down',
+      label: `${field}: ${value}`,
+      field,
+      value,
+      pageId: targetPageId,
+    });
+  }, [pages, filterManager]);
+
   // Compute offsets to center the page
   const cw = containerSize.width;
   const ch = containerSize.height - (showPageNav && pages.length > 1 ? 48 : 0);
@@ -243,7 +365,7 @@ function DashboardViewerInner({
         width,
         height,
         overflow: 'hidden',
-        backgroundColor: backgroundColor ?? '#e9ecef',
+        backgroundColor: backgroundColor ?? theme.canvasBg,
         display: 'flex',
         flexDirection: 'column',
         ...style,
@@ -281,23 +403,31 @@ function DashboardViewerInner({
               boxShadow: '0 4px 24px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.03)',
             }}
           >
-            {sortedElements.map((element) => (
-              <DOMElementRenderer
-                key={element.id}
-                element={element}
-                isSelected={false}
-                isEditing={false}
-                zoom={zoom}
-                onSelect={noopStrBool}
-                onDragStart={noopStrMouse}
-                onResizeStart={noopStrStr}
-                onRotateStart={noopStrMouse}
-                onDblClick={noopStr}
-                activeFilterValues={interactive && activeFilterValues.size > 0 ? activeFilterValues : undefined}
-                onFilterClick={interactive ? handleFilterClick : undefined}
-                onFilterControlChange={interactive ? handleFilterControlChange : undefined}
-              />
-            ))}
+            {sortedElements.map((element) => {
+              const dsId = element.dataSource?.dataSourceId;
+              const dsStatus = dsId ? dataSourceStatusMap.get(dsId) : undefined;
+              return (
+                <DOMElementRenderer
+                  key={element.id}
+                  element={element}
+                  isSelected={false}
+                  isEditing={false}
+                  zoom={zoom}
+                  onSelect={noopStrBool}
+                  onDragStart={noopStrMouse}
+                  onResizeStart={noopStrStr}
+                  onRotateStart={noopStrMouse}
+                  onDblClick={noopStr}
+                  activeFilterValues={interactive && activeFilterValues.size > 0 ? activeFilterValues : undefined}
+                  onFilterClick={interactive ? handleFilterClick : undefined}
+                  onFilterControlChange={interactive ? handleFilterControlChange : undefined}
+                  onDrillDown={interactive ? handleDrillDown : undefined}
+                  dataLoading={dsStatus?.loading}
+                  dataError={dsStatus?.error}
+                  onDataRetry={dsId ? () => retryDataSourceFetch(dsId) : undefined}
+                />
+              );
+            })}
           </div>
         </div>
       </div>
@@ -321,7 +451,7 @@ function DashboardViewerInner({
       )}
     </div>
   );
-}
+});
 
 const viewerStyles: Record<string, React.CSSProperties> = {
   pageNav: {

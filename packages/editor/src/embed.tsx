@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { createRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { Document } from '@reactcanvas/core';
+import type { Document, DashboardFilter } from '@reactcanvas/core';
 import { DashboardViewer } from './DashboardViewer';
+import type { DashboardViewerRef } from './DashboardViewer';
+import type { EditorTheme } from './ThemeContext';
 
 export interface EmbedOptions {
   /** Target DOM element or CSS selector */
@@ -24,11 +26,26 @@ export interface EmbedOptions {
   width?: string;
   /** Height (CSS value) */
   height?: string;
+  /** Called when a filter is applied or removed */
+  onFilterChange?: (filters: DashboardFilter[]) => void;
+  /** Called when page changes */
+  onPageChange?: (pageIndex: number, pageName: string) => void;
+  /** Called when any widget is clicked */
+  onWidgetClick?: (elementId: string, elementType: string, elementName: string) => void;
+  /** Values for {{variable}} placeholders in the document */
+  variables?: Record<string, string | number>;
+  /** Theme customization — pass partial overrides to change colors, fonts, and styling */
+  theme?: Partial<EditorTheme>;
 }
 
 interface EmbedInstance {
   unmount: () => void;
   update: (options: Partial<EmbedOptions>) => void;
+  // Programmatic API
+  setFilter: (field: string, value: string) => void;
+  clearFilters: () => void;
+  goToPage: (index: number) => void;
+  refreshData: () => void;
 }
 
 function resolveTarget(target: string | HTMLElement): HTMLElement {
@@ -94,10 +111,12 @@ async function render(options: EmbedOptions): Promise<EmbedInstance> {
 
   let currentOptions = { ...options };
   const root = createRoot(container);
+  const viewerRef = createRef<DashboardViewerRef>();
 
   function renderViewer(viewerDoc: Document) {
     root.render(
       <DashboardViewer
+        ref={viewerRef}
         document={viewerDoc}
         documentUrl={currentOptions.documentUrl}
         streamUrl={currentOptions.streamUrl}
@@ -107,6 +126,11 @@ async function render(options: EmbedOptions): Promise<EmbedInstance> {
         interactive={currentOptions.interactive ?? true}
         width={currentOptions.width ?? '100%'}
         height={currentOptions.height ?? '100%'}
+        onFilterChange={currentOptions.onFilterChange}
+        onPageChange={currentOptions.onPageChange}
+        onWidgetClick={currentOptions.onWidgetClick}
+        variables={currentOptions.variables}
+        theme={currentOptions.theme}
       />
     );
   }
@@ -123,11 +147,23 @@ async function render(options: EmbedOptions): Promise<EmbedInstance> {
         renderViewer(newOptions.document);
       }
     },
+    setFilter(field: string, value: string) {
+      viewerRef.current?.setFilter(field, value);
+    },
+    clearFilters() {
+      viewerRef.current?.clearFilters();
+    },
+    goToPage(index: number) {
+      viewerRef.current?.goToPage(index);
+    },
+    refreshData() {
+      viewerRef.current?.refreshData();
+    },
   };
 }
 
 export { render };
 
 if (typeof window !== 'undefined') {
-  (window as any).DashboardEmbed = { render };
+  (window as unknown as Record<string, unknown>).DashboardEmbed = { render };
 }

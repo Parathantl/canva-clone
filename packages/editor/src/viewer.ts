@@ -11,7 +11,11 @@
 
 // Viewer component
 export { DashboardViewer } from './DashboardViewer';
-export type { DashboardViewerProps } from './DashboardViewer';
+export type { DashboardViewerProps, DashboardViewerRef } from './DashboardViewer';
+
+// Theming
+export { ThemeProvider, useTheme, defaultTheme, themeGradient } from './ThemeContext';
+export type { EditorTheme } from './ThemeContext';
 
 // Types consumers need
 export type {
@@ -25,6 +29,7 @@ export type {
   ProgressElement,
   DataSource,
   DashboardFilter,
+  DashboardVariable,
 } from '@reactcanvas/core';
 
 // Factories for creating documents + elements
@@ -42,4 +47,11 @@ export {
   populateDocument,
   populateDocumentById,
   getWidgetNames,
+} from '@reactcanvas/core';
+
+// Dashboard variable utilities
+export {
+  resolveVariables,
+  extractVariables,
+  validateVariables,
 } from '@reactcanvas/core';

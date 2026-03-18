@@ -2,6 +2,10 @@
 export { DesignEditor } from './DesignEditor';
 export type { DesignEditorProps } from './DesignEditor';
 
+// Theming
+export { ThemeProvider, useTheme, defaultTheme, themeGradient } from './ThemeContext';
+export type { EditorTheme } from './ThemeContext';
+
 // Canvas
 export { EditorCanvas } from './canvas/EditorCanvas';
 export type { EditorCanvasProps } from './canvas/EditorCanvas';
@@ -24,7 +28,7 @@ export type { SlidePresentation, Slide, SlideElement, LLMCaller } from './utils/
 
 // Dashboard Viewer (embeddable read-only component)
 export { DashboardViewer } from './DashboardViewer';
-export type { DashboardViewerProps } from './DashboardViewer';
+export type { DashboardViewerProps, DashboardViewerRef } from './DashboardViewer';
 
 // Re-export everything from core, react, and plugins for convenience
 export * from '@reactcanvas/core';

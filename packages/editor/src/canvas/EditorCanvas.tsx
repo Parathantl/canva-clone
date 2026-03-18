@@ -8,11 +8,13 @@ import {
   usePages,
   useHistory,
   useFilters,
+  useDataSourceStatus,
 } from '@reactcanvas/react';
 import { DOMElementRenderer } from '../renderers/DOMElementRenderer';
 import { copyElements, pasteElements, flipElements, getClipboard } from './useClipboard';
 import { computeSmartGuides, type Guide } from './smartGuides';
 import { processImageFile } from '../utils/imageUpload';
+import { useTheme } from '../ThemeContext';
 import { ContextMenu } from './ContextMenu';
 import {
   NUDGE_AMOUNT,
@@ -44,9 +46,11 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
   const { elements, updateElement, removeElements, duplicateElements, addElement, bringToFront, sendToBack, bringForward, sendBackward, groupElements, ungroupElement } = useElements();
   const { selectedElementIds, select, deselectAll, selectAll, selectMultiple } = useSelection();
   const { zoom, panX, panY, setZoom, setPan, zoomToFit } = useViewport();
-  const { activePage } = usePages();
+  const { activePage, setActivePage } = usePages();
   const { undo, redo } = useHistory();
-  const { filters, toggleFilter, addFilter, removeFilter: removeOneFilter, filterManager } = useFilters();
+  const { filters, toggleFilter, addFilter, filterManager } = useFilters();
+  const { statusMap: dataSourceStatusMap, retryFetch: retryDataSourceFetch } = useDataSourceStatus();
+  const theme = useTheme();
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   // Notify parent when text editing state changes
   useEffect(() => {
@@ -99,6 +103,21 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
       });
     }
   }, [filterManager, addFilter]);
+
+  // Handle drill-down navigation: navigate to a target page and apply a filter
+  const handleDrillDown = useCallback((targetPageId: string, field: string, value: string) => {
+    // 1. Navigate to the target page
+    setActivePage(targetPageId);
+    // 2. Apply filter on the target page
+    filterManager.clearPageFilters(targetPageId);
+    filterManager.addFilter({
+      sourceElementId: 'drill-down',
+      label: `${field}: ${value}`,
+      field,
+      value,
+      pageId: targetPageId,
+    });
+  }, [setActivePage, filterManager]);
 
   // Fit to screen on initial load, page/document switch, and canvas resize
   const activePageId = activePage?.id ?? '';
@@ -744,7 +763,7 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
         width,
         height,
         overflow: 'hidden',
-        backgroundColor: '#e9ecef',
+        backgroundColor: theme.canvasBg,
         cursor: dragging?.type === 'pan' ? 'grabbing' : isPanMode ? 'grab' : dragging?.type === 'move' ? 'grabbing' : dragging?.type === 'rotate' ? 'grabbing' : dragging?.type === 'rubberband' ? 'crosshair' : 'default',
         outline: 'none',
       }}
@@ -779,27 +798,35 @@ export function EditorCanvas({ width = 1200, height = 800, className, canvasRef:
           onMouseDown={handlePageClick}
         >
           {/* Elements */}
-          {sortedElements.map((element) => (
-            <DOMElementRenderer
-              key={element.id}
-              element={element}
-              isSelected={selectedElementIds.includes(element.id)}
-              isEditing={editingTextId === element.id}
-              zoom={zoom}
-              onSelect={handleSelect}
-              onDragStart={handleDragStart}
-              onResizeStart={handleResizeStart}
-              onRotateStart={handleRotateStart}
-              onDblClick={handleDblClick}
-              onContextMenu={handleElementContextMenu}
-              onAutoResize={handleAutoResize}
-              onTextContentChange={handleTextContentChange}
-              onTextEditComplete={handleTextEditComplete}
-              activeFilterValues={activeFilterValues.size > 0 ? activeFilterValues : undefined}
-              onFilterClick={handleFilterClick}
-              onFilterControlChange={handleFilterControlChange}
-            />
-          ))}
+          {sortedElements.map((element) => {
+            const dsId = element.dataSource?.dataSourceId;
+            const dsStatus = dsId ? dataSourceStatusMap.get(dsId) : undefined;
+            return (
+              <DOMElementRenderer
+                key={element.id}
+                element={element}
+                isSelected={selectedElementIds.includes(element.id)}
+                isEditing={editingTextId === element.id}
+                zoom={zoom}
+                onSelect={handleSelect}
+                onDragStart={handleDragStart}
+                onResizeStart={handleResizeStart}
+                onRotateStart={handleRotateStart}
+                onDblClick={handleDblClick}
+                onContextMenu={handleElementContextMenu}
+                onAutoResize={handleAutoResize}
+                onTextContentChange={handleTextContentChange}
+                onTextEditComplete={handleTextEditComplete}
+                activeFilterValues={activeFilterValues.size > 0 ? activeFilterValues : undefined}
+                onFilterClick={handleFilterClick}
+                onFilterControlChange={handleFilterControlChange}
+                onDrillDown={handleDrillDown}
+                dataLoading={dsStatus?.loading}
+                dataError={dsStatus?.error}
+                onDataRetry={dsId ? () => retryDataSourceFetch(dsId) : undefined}
+              />
+            );
+          })}
         </div>
       </div>
 

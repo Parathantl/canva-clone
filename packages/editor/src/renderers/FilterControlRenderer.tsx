@@ -64,7 +64,7 @@ export const FilterControlContent = memo(function FilterControlContent({
           style={styles.select}
         >
           <option value="">{placeholder || 'All'}</option>
-          {options.map((opt, i) => (
+          {options.map((opt) => (
             <option key={opt} value={opt}>{opt}</option>
           ))}
         </select>

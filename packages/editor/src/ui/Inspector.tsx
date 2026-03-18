@@ -1,9 +1,10 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import { useSelection, useElements, usePages, useDataSources } from '@reactcanvas/react';
 import type { CanvasElement, ShapeElement, LineElement, ChartElement, KPIElement, TableElement, ProgressElement, EmbedElement, ImageElement, Fill, Shadow } from '@reactcanvas/core';
 import { isSolidFill, isLinearGradient, isRadialGradient, isGradientFill } from '@reactcanvas/core';
 import { FILTER_PRESETS, applyFilterPreset } from '@reactcanvas/images';
 import { ColorPicker } from './ColorPicker';
+import { useTheme } from '../ThemeContext';
 
 const DEFAULT_SHADOW: Shadow = { color: 'rgba(0,0,0,0.3)', blur: 10, offsetX: 0, offsetY: 4, spread: 0 };
 
@@ -11,6 +12,13 @@ export function Inspector() {
   const { selectedElements, hasSelection, selectionCount } = useSelection();
   const { updateElement, updateElements } = useElements();
   const { activePage } = usePages();
+  const theme = useTheme();
+
+  const themedStyles = useMemo(() => ({
+    inspector: { ...styles.inspector, backgroundColor: theme.panelBg },
+    sectionHeader: { ...styles.sectionHeader, color: theme.textPrimary },
+    groupLabel: { ...styles.groupLabel, color: theme.textMuted },
+  }), [theme]);
 
   if (!hasSelection) {
     return <PageInspector />;
@@ -20,8 +28,8 @@ export function Inspector() {
   if (!element) return null;
 
   return (
-    <div style={styles.inspector}>
-      <div style={styles.sectionHeader}>Properties</div>
+    <div style={themedStyles.inspector}>
+      <div style={themedStyles.sectionHeader}>Properties</div>
 
       {/* Alignment tools — show when multiple elements selected */}
       {selectionCount >= 2 && (
@@ -216,12 +224,13 @@ function TypeSpecificInspector({ element }: { element: CanvasElement }) {
 
 function PageInspector() {
   const { activePage, activePageId, updatePage } = usePages();
+  const theme = useTheme();
 
   if (!activePage) return null;
 
   return (
-    <div style={styles.inspector}>
-      <div style={styles.sectionHeader}>Page Properties</div>
+    <div style={{ ...styles.inspector, backgroundColor: theme.panelBg }}>
+      <div style={{ ...styles.sectionHeader, color: theme.textPrimary }}>Page Properties</div>
 
       <PropertyGroup label="Dimensions">
         <PropertyRow label="Width">
@@ -648,6 +657,7 @@ function NumberInput({
 
 function ChartInspector({ element }: { element: ChartElement }) {
   const { updateElement } = useElements();
+  const { pages } = usePages();
   const [showDataEditor, setShowDataEditor] = useState(false);
   const [csvInput, setCsvInput] = useState('');
 
@@ -831,6 +841,31 @@ function ChartInspector({ element }: { element: ChartElement }) {
           />
         </PropertyRow>
       </PropertyGroup>
+
+      <PropertyGroup label="Drill-Down">
+        <PropertyRow label="Target Page">
+          <select
+            value={element.drillDownPageId || ''}
+            onChange={(e) => updateElement(element.id, { drillDownPageId: e.target.value || undefined } as Partial<CanvasElement>)}
+            style={styles.select}
+          >
+            <option value="">None</option>
+            {pages.map((p) => (
+              <option key={p.id} value={p.id}>{p.name || 'Untitled Page'}</option>
+            ))}
+          </select>
+        </PropertyRow>
+        {element.drillDownPageId && (
+          <PropertyRow label="Filter Field">
+            <input
+              type="text"
+              value={element.drillDownField || 'label'}
+              onChange={(e) => updateElement(element.id, { drillDownField: e.target.value } as Partial<CanvasElement>)}
+              style={styles.numberInput}
+            />
+          </PropertyRow>
+        )}
+      </PropertyGroup>
     </>
   );
 }
@@ -966,6 +1001,7 @@ function KPIInspector({ element }: { element: KPIElement }) {
 
 function TableInspector({ element }: { element: TableElement }) {
   const { updateElement } = useElements();
+  const { pages } = usePages();
   const [showCfEditor, setShowCfEditor] = useState(false);
   const rules = (element as any).conditionalFormats ?? [];
 
@@ -1114,6 +1150,44 @@ function TableInspector({ element }: { element: TableElement }) {
               + Add Rule
             </button>
           </div>
+        )}
+      </PropertyGroup>
+
+      <PropertyGroup label="Drill-Down">
+        <PropertyRow label="Target Page">
+          <select
+            value={element.drillDownPageId || ''}
+            onChange={(e) => updateElement(element.id, { drillDownPageId: e.target.value || undefined } as Partial<CanvasElement>)}
+            style={styles.select}
+          >
+            <option value="">None</option>
+            {pages.map((p) => (
+              <option key={p.id} value={p.id}>{p.name || 'Untitled Page'}</option>
+            ))}
+          </select>
+        </PropertyRow>
+        {element.drillDownPageId && (
+          <>
+            <PropertyRow label="Filter Column">
+              <select
+                value={element.drillDownColumn ?? 0}
+                onChange={(e) => updateElement(element.id, { drillDownColumn: parseInt(e.target.value) } as Partial<CanvasElement>)}
+                style={styles.select}
+              >
+                {element.headers.map((h: string, i: number) => (
+                  <option key={i} value={i}>{h}</option>
+                ))}
+              </select>
+            </PropertyRow>
+            <PropertyRow label="Filter Field">
+              <input
+                type="text"
+                value={element.drillDownField || 'label'}
+                onChange={(e) => updateElement(element.id, { drillDownField: e.target.value } as Partial<CanvasElement>)}
+                style={styles.numberInput}
+              />
+            </PropertyRow>
+          </>
         )}
       </PropertyGroup>
 

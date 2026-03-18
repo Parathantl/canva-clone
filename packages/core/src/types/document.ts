@@ -187,6 +187,10 @@ export interface ChartElement extends BaseElement {
   colors: string[];
   backgroundColor: string;
   borderRadius: number;
+  /** Drill-down: target page ID to navigate to when a data point is clicked */
+  drillDownPageId?: string;
+  /** Drill-down: field name to filter by on the target page */
+  drillDownField?: string;
 }
 
 // KPI / Metric card
@@ -247,6 +251,12 @@ export interface TableElement extends BaseElement {
   currentPage?: number;
   // Conditional formatting
   conditionalFormats?: ConditionalFormatRule[];
+  /** Drill-down: target page ID when a row is clicked */
+  drillDownPageId?: string;
+  /** Drill-down: column index whose value is used as filter */
+  drillDownColumn?: number;
+  /** Drill-down: field name to filter by on the target page */
+  drillDownField?: string;
 }
 
 // Progress / Gauge element
@@ -421,6 +431,14 @@ export interface DataSourceBinding {
   fieldMapping?: Partial<FieldMapping>;
 }
 
+// Dashboard Variables
+export interface DashboardVariable {
+  name: string;           // e.g. "customerId", "dateRange"
+  defaultValue: string;   // default value if not provided at render time
+  type: 'string' | 'number' | 'date';
+  label?: string;         // human-readable label
+}
+
 // Root document model
 export interface Document {
   id: string;
@@ -428,6 +446,7 @@ export interface Document {
   schemaVersion: number;
   pages: Page[];
   dataSources?: DataSource[];
+  variables?: DashboardVariable[];
   createdAt: string;
   updatedAt: string;
 }

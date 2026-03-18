@@ -5,6 +5,7 @@ import { isSolidFill, isLinearGradient, isRadialGradient } from '@reactcanvas/co
 import { ChartContent, KPIContent, TableContent, ProgressContent, EmbedContent } from './WidgetRenderers';
 import type { ChartFilterEvent } from './WidgetRenderers';
 import { FilterControlContent } from './FilterControlRenderer';
+import { WidgetOverlay } from './WidgetOverlay';
 
 interface DOMElementRendererProps {
   element: CanvasElement;
@@ -26,6 +27,14 @@ interface DOMElementRendererProps {
   onFilterClick?: (event: ChartFilterEvent) => void;
   /** Called when a filter control value changes */
   onFilterControlChange?: (elementId: string, field: string, values: string[], label: string) => void;
+  /** Called when a drill-down navigation is triggered */
+  onDrillDown?: (targetPageId: string, field: string, value: string) => void;
+  /** Whether a bound data source is currently fetching */
+  dataLoading?: boolean;
+  /** Error message from a failed data source fetch */
+  dataError?: string;
+  /** Retry callback when data source fetch fails */
+  onDataRetry?: () => void;
 }
 
 const HANDLE_SIZE = 10;
@@ -67,6 +76,10 @@ export const DOMElementRenderer = memo(function DOMElementRenderer({
   activeFilterValues,
   onFilterClick,
   onFilterControlChange,
+  onDrillDown,
+  dataLoading,
+  dataError,
+  onDataRetry,
 }: DOMElementRendererProps) {
   const elRef = useRef<HTMLDivElement>(null);
 
@@ -191,7 +204,12 @@ export const DOMElementRenderer = memo(function DOMElementRenderer({
           onEditComplete={onTextEditComplete}
         />
       ) : (
-        <ElementContent element={element} activeFilterValues={activeFilterValues} onFilterClick={onFilterClick} onFilterControlChange={onFilterControlChange} />
+        <ElementContent element={element} activeFilterValues={activeFilterValues} onFilterClick={onFilterClick} onFilterControlChange={onFilterControlChange} onDrillDown={onDrillDown} />
+      )}
+
+      {/* Data source loading/error overlay */}
+      {(dataLoading || dataError) && (
+        <WidgetOverlay loading={dataLoading} error={dataError} onRetry={onDataRetry} />
       )}
 
       {/* Selection handles — hide when editing text */}
@@ -268,11 +286,13 @@ const ElementContent = memo(function ElementContent({
   activeFilterValues,
   onFilterClick,
   onFilterControlChange,
+  onDrillDown,
 }: {
   element: CanvasElement;
   activeFilterValues?: Set<string>;
   onFilterClick?: (event: ChartFilterEvent) => void;
   onFilterControlChange?: (elementId: string, field: string, values: string[], label: string) => void;
+  onDrillDown?: (targetPageId: string, field: string, value: string) => void;
 }) {
   switch (element.type) {
     case 'shape':
@@ -280,11 +300,13 @@ const ElementContent = memo(function ElementContent({
     case 'image':
       return <ImageContent element={element as ImageElement} />;
     case 'chart':
-      return <ChartContent element={element as ChartElement} activeFilterValues={activeFilterValues} onFilterClick={onFilterClick} />;
+      return <ChartContent element={element as ChartElement} activeFilterValues={activeFilterValues} onFilterClick={onFilterClick} onDrillDown={(element as ChartElement).drillDownPageId ? onDrillDown : undefined} />;
     case 'kpi':
       return <KPIContent element={element as KPIElement} />;
-    case 'table':
-      return <TableContent element={element as TableElement} activeFilterValues={activeFilterValues} />;
+    case 'table': {
+      const tableEl = element as TableElement;
+      return <TableContent element={tableEl} activeFilterValues={activeFilterValues} onDrillDown={tableEl.drillDownPageId ? onDrillDown : undefined} drillDownPageId={tableEl.drillDownPageId} drillDownColumn={tableEl.drillDownColumn} drillDownField={tableEl.drillDownField} />;
+    }
     case 'progress':
       return <ProgressContent element={element as ProgressElement} />;
     case 'embed':

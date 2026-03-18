@@ -1,4 +1,4 @@
-import { memo, useState, useMemo, useCallback } from 'react';
+import React, { memo, useState, useMemo, useCallback } from 'react';
 import type {
   KPIElement,
   TableElement,
@@ -58,9 +58,13 @@ export const KPIContent = memo(function KPIContent({ element }: { element: KPIEl
 
 export interface TableFilterProps {
   activeFilterValues?: Set<string>;
+  onDrillDown?: (targetPageId: string, field: string, value: string) => void;
+  drillDownPageId?: string;
+  drillDownColumn?: number;
+  drillDownField?: string;
 }
 
-export const TableContent = memo(function TableContent({ element, activeFilterValues }: { element: TableElement } & TableFilterProps) {
+export const TableContent = memo(function TableContent({ element, activeFilterValues, onDrillDown, drillDownPageId, drillDownColumn, drillDownField }: { element: TableElement } & TableFilterProps) {
   const {
     headers, rows, headerBg, headerColor, rowBg, altRowBg, cellColor,
     borderColor, borderRadius, fontSize, conditionalFormats,
@@ -100,6 +104,15 @@ export const TableContent = memo(function TableContent({ element, activeFilterVa
   const displayRows = pageSize > 0
     ? sortedRows.slice(currentPage * pageSize, (currentPage + 1) * pageSize)
     : sortedRows;
+
+  const hasDrillDown = !!(drillDownPageId && onDrillDown);
+
+  const handleRowClick = useCallback((row: string[]) => {
+    if (!hasDrillDown || !drillDownPageId || !onDrillDown) return;
+    const colIdx = drillDownColumn ?? 0;
+    const value = row[colIdx] ?? '';
+    onDrillDown(drillDownPageId, drillDownField || 'label', value);
+  }, [hasDrillDown, drillDownPageId, drillDownColumn, drillDownField, onDrillDown]);
 
   const handleHeaderClick = useCallback((colIdx: number) => {
     if (sortCol === colIdx) {
@@ -165,6 +178,7 @@ export const TableContent = memo(function TableContent({ element, activeFilterVa
           return (
             <div
               key={row.join('|') + ri}
+              onClick={hasDrillDown ? (e) => { e.stopPropagation(); handleRowClick(row); } : undefined}
               style={{
                 display: 'flex',
                 flex: pageSize > 0 ? undefined : 1,
@@ -174,6 +188,7 @@ export const TableContent = memo(function TableContent({ element, activeFilterVa
                 alignItems: 'center',
                 opacity: hasFilter && !matches ? 0.35 : 1,
                 transition: 'opacity 0.15s, background-color 0.15s',
+                cursor: hasDrillDown ? 'pointer' : undefined,
               }}
             >
               {row.map((cell: string, ci: number) => {

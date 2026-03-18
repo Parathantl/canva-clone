@@ -46,6 +46,9 @@ export {
 // Document Population (for backend data injection)
 export { populateDocument, populateDocumentById, getWidgetNames } from './utils/populateDocument';
 
+// Dashboard Variables
+export { resolveVariables, extractVariables, validateVariables } from './utils/resolveVariables';
+
 // Filters
 export { FilterManager } from './filters/FilterManager';
 

@@ -16,8 +16,11 @@ import { ErrorBoundary } from './ui/ErrorBoundary';
 import { AIChat } from './ui/AIChat';
 import type { AIChatMessage, StreamCallback } from './ui/AIChat';
 import { DataSourcePanel } from './ui/DataSourcePanel';
+import { VariablesPanel } from './ui/VariablesPanel';
 import { FilterBar } from './ui/FilterBar';
 import { useFontLoader } from './hooks/useFontLoader';
+import { ThemeProvider, useTheme } from './ThemeContext';
+import type { EditorTheme } from './ThemeContext';
 
 export interface DesignEditorProps {
   initialDocument?: Document;
@@ -38,6 +41,8 @@ export interface DesignEditorProps {
   showToolbar?: boolean;
   showSidebar?: boolean;
   showInspector?: boolean;
+  /** Theme customization — pass partial overrides to change colors, fonts, and styling */
+  theme?: Partial<EditorTheme>;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -56,6 +61,7 @@ export function DesignEditor({
   showToolbar = true,
   showSidebar = true,
   showInspector = true,
+  theme,
   className,
   style,
 }: DesignEditorProps) {
@@ -98,30 +104,33 @@ export function DesignEditor({
   }, [width, height]);
 
   return (
-    <EditorProvider initialDocument={initialDocument} plugins={allPlugins} onChange={handleChange}>
-      <EditorInner
-        containerRef={containerRef}
-        containerSize={containerSize}
-        showToolbar={showToolbar}
-        showSidebar={showSidebar}
-        showInspector={showInspector}
-        onImageUpload={onImageUpload}
-        onAISendMessage={onAISendMessage}
-        aiTransformResponse={aiTransformResponse}
-        className={className}
-        style={style}
-      />
-    </EditorProvider>
+    <ThemeProvider theme={theme}>
+      <EditorProvider initialDocument={initialDocument} plugins={allPlugins} onChange={handleChange}>
+        <EditorInner
+          containerRef={containerRef}
+          containerSize={containerSize}
+          showToolbar={showToolbar}
+          showSidebar={showSidebar}
+          showInspector={showInspector}
+          onImageUpload={onImageUpload}
+          onAISendMessage={onAISendMessage}
+          aiTransformResponse={aiTransformResponse}
+          className={className}
+          style={style}
+        />
+      </EditorProvider>
+    </ThemeProvider>
   );
 }
 
-type SidePanel = 'pages' | 'widgets' | 'templates' | 'data' | 'ai' | null;
+type SidePanel = 'pages' | 'widgets' | 'templates' | 'data' | 'variables' | 'ai' | null;
 
 // Icon rail items
 const BASE_railItems: { id: SidePanel; icon: string; label: string }[] = [
   { id: 'pages', icon: '\u25A3', label: 'Pages & Layers' },
   { id: 'widgets', icon: '\u2B1A', label: 'Widgets' },
   { id: 'data', icon: '\u29C9', label: 'Data Sources' },
+  { id: 'variables', icon: '{x}', label: 'Variables' },
   { id: 'templates', icon: '\u2B13', label: 'Templates' },
 ];
 const AI_RAIL_ITEM = { id: 'ai' as SidePanel, icon: '\u2728', label: 'AI' };
@@ -157,6 +166,7 @@ function EditorInner({
   const [isEditingText, setIsEditingText] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { loadDocument } = useEditor();
+  const theme = useTheme();
 
   const handleImport = useCallback(
     (doc: Document) => {
@@ -222,8 +232,8 @@ function EditorInner({
         width: '100%',
         height: '100vh',
         overflow: 'hidden',
-        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        backgroundColor: '#e9ecef',
+        fontFamily: theme.fontFamily,
+        backgroundColor: theme.canvasBg,
         ...style,
       }}
     >
@@ -297,6 +307,7 @@ function EditorInner({
               {activePanel === 'pages' && <Sidebar />}
               {activePanel === 'widgets' && <WidgetLibrary />}
               {activePanel === 'data' && <DataSourcePanel />}
+              {activePanel === 'variables' && <VariablesPanel />}
               {activePanel === 'templates' && <Templates />}
               {activePanel === 'ai' && onAISendMessage && (
                 <AIChat

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useMemo } from 'react';
 import {
   useSelection,
   useElements,
@@ -12,6 +12,7 @@ import {
   createLineElement,
 } from '@reactcanvas/core';
 import { processImageFile } from '../utils/imageUpload';
+import { useTheme, themeGradient } from '../ThemeContext';
 
 export function Toolbar({ onExport, onPresent, onShortcuts, handTool, onHandToolToggle, canvasWidth, canvasHeight }: {
   onExport?: () => void;
@@ -22,6 +23,7 @@ export function Toolbar({ onExport, onPresent, onShortcuts, handTool, onHandTool
   canvasWidth?: number;
   canvasHeight?: number;
 }) {
+  const theme = useTheme();
   const { selectedElementIds } = useSelection();
   const { addElement, removeElements, duplicateElements, elements } = useElements();
   const elementCountRef = useRef(elements.length);
@@ -68,11 +70,18 @@ export function Toolbar({ onExport, onPresent, onShortcuts, handTool, onHandTool
     addElement(createTextElement({ x: pageCenter.x - 150, y: pageCenter.y - 30, layerOrder: elementCountRef.current }));
   }, [addElement, pageCenter.x, pageCenter.y]);
 
+  const themedStyles = useMemo(() => ({
+    toolbar: { ...styles.toolbar, backgroundColor: theme.panelBg },
+    logo: { ...styles.logo, background: themeGradient(theme) },
+    exportButton: { ...styles.exportButton, background: themeGradient(theme) },
+    btnActive: { ...styles.btnActive, backgroundColor: `${theme.primaryColor}18`, color: theme.primaryColor },
+  }), [theme]);
+
   return (
-    <div style={styles.toolbar}>
+    <div style={themedStyles.toolbar}>
       {/* Left: Logo + Creation tools */}
       <div style={styles.section}>
-        <div style={styles.logo}>RC</div>
+        <div style={themedStyles.logo}>RC</div>
 
         <div style={styles.toolGroup}>
           <ToolBtn icon={'\u25A2'} tip="Rectangle" onClick={() => handleAddShape('rectangle')} />
@@ -167,7 +176,7 @@ export function Toolbar({ onExport, onPresent, onShortcuts, handTool, onHandTool
         {onExport && (
           <>
             <div style={styles.divider} />
-            <button onClick={onExport} style={styles.exportButton}>
+            <button onClick={onExport} style={themedStyles.exportButton}>
               Export
             </button>
           </>
@@ -228,6 +237,7 @@ function ToolBtn({
   small?: boolean;
   onClick: () => void;
 }) {
+  const theme = useTheme();
   return (
     <button
       onClick={onClick}
@@ -236,7 +246,7 @@ function ToolBtn({
       style={{
         ...styles.btn,
         ...(small ? styles.btnSmall : {}),
-        ...(active ? styles.btnActive : {}),
+        ...(active ? { ...styles.btnActive, backgroundColor: `${theme.primaryColor}18`, color: theme.primaryColor } : {}),
         ...(disabled ? styles.btnDisabled : {}),
       }}
     >

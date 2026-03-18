@@ -34,6 +34,8 @@ export interface EmbedOptions {
   onWidgetClick?: (elementId: string, elementType: string, elementName: string) => void;
   /** Values for {{variable}} placeholders in the document */
   variables?: Record<string, string | number>;
+  /** Mobile breakpoint in px — below this, widgets stack vertically (default 768) */
+  mobileBreakpoint?: number;
   /** Theme customization — pass partial overrides to change colors, fonts, and styling */
   theme?: Partial<EditorTheme>;
 }
@@ -131,6 +133,7 @@ async function render(options: EmbedOptions): Promise<EmbedInstance> {
         onWidgetClick={currentOptions.onWidgetClick}
         variables={currentOptions.variables}
         theme={currentOptions.theme}
+        mobileBreakpoint={currentOptions.mobileBreakpoint}
       />
     );
   }

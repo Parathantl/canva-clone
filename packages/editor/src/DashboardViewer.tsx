@@ -39,6 +39,8 @@ export interface DashboardViewerProps {
   backgroundColor?: string;
   /** Show page navigation if multi-page (default true) */
   showPageNav?: boolean;
+  /** Mobile breakpoint in px — below this width, widgets stack vertically (default 768) */
+  mobileBreakpoint?: number;
   /** CSS class */
   className?: string;
   /** Inline styles */
@@ -199,6 +201,7 @@ const DashboardViewerInner = forwardRef<DashboardViewerRef, DashboardViewerProps
   height = '100%',
   backgroundColor,
   showPageNav = true,
+  mobileBreakpoint = 768,
   className,
   style,
   onFilterChange,
@@ -350,7 +353,10 @@ const DashboardViewerInner = forwardRef<DashboardViewerRef, DashboardViewerProps
     });
   }, [pages, filterManager]);
 
-  // Compute offsets to center the page
+  // Mobile responsive: reflow widgets below breakpoint
+  const isMobile = containerSize.width > 0 && containerSize.width < mobileBreakpoint;
+
+  // Compute offsets to center the page (desktop mode)
   const cw = containerSize.width;
   const ch = containerSize.height - (showPageNav && pages.length > 1 ? 48 : 0);
   const offsetX = (cw - pageWidth * zoom) / 2 + panX;
@@ -380,39 +386,46 @@ const DashboardViewerInner = forwardRef<DashboardViewerRef, DashboardViewerProps
         />
       )}
 
-      {/* Canvas area */}
-      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-        <div
-          style={{
-            position: 'absolute',
-            left: offsetX,
-            top: offsetY,
-            width: pageWidth,
-            height: pageHeight,
-            transform: `scale(${zoom})`,
-            transformOrigin: '0 0',
-          }}
-        >
-          {/* Page background */}
-          <div
-            style={{
-              position: 'absolute',
-              width: pageWidth,
-              height: pageHeight,
-              backgroundColor: activePage?.backgroundColor ?? '#ffffff',
-              boxShadow: '0 4px 24px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.03)',
-            }}
-          >
-            {sortedElements.map((element) => {
-              const dsId = element.dataSource?.dataSourceId;
-              const dsStatus = dsId ? dataSourceStatusMap.get(dsId) : undefined;
-              return (
+      {isMobile ? (
+        /* ─── Mobile: stacked vertical layout ─── */
+        <div style={{
+          flex: 1,
+          overflow: 'auto',
+          padding: 12,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+          backgroundColor: activePage?.backgroundColor ?? '#ffffff',
+        }}>
+          {sortedElements.map((element) => {
+            const dsId = element.dataSource?.dataSourceId;
+            const dsStatus = dsId ? dataSourceStatusMap.get(dsId) : undefined;
+            // Calculate responsive height: preserve aspect ratio, full width
+            const aspectRatio = element.height / Math.max(element.width, 1);
+            const mobileHeight = Math.max(120, Math.min(400, (containerSize.width - 24) * aspectRatio));
+            return (
+              <div
+                key={element.id}
+                style={{
+                  position: 'relative',
+                  width: '100%',
+                  height: mobileHeight,
+                  flexShrink: 0,
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                }}
+              >
                 <DOMElementRenderer
-                  key={element.id}
-                  element={element}
+                  element={{
+                    ...element,
+                    x: 0,
+                    y: 0,
+                    width: containerSize.width - 24,
+                    height: mobileHeight,
+                  } as CanvasElement}
                   isSelected={false}
                   isEditing={false}
-                  zoom={zoom}
+                  zoom={1}
                   onSelect={noopStrBool}
                   onDragStart={noopStrMouse}
                   onResizeStart={noopStrStr}
@@ -426,11 +439,62 @@ const DashboardViewerInner = forwardRef<DashboardViewerRef, DashboardViewerProps
                   dataError={dsStatus?.error}
                   onDataRetry={dsId ? () => retryDataSourceFetch(dsId) : undefined}
                 />
-              );
-            })}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* ─── Desktop: scaled canvas layout ─── */
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+          <div
+            style={{
+              position: 'absolute',
+              left: offsetX,
+              top: offsetY,
+              width: pageWidth,
+              height: pageHeight,
+              transform: `scale(${zoom})`,
+              transformOrigin: '0 0',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                width: pageWidth,
+                height: pageHeight,
+                backgroundColor: activePage?.backgroundColor ?? '#ffffff',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.03)',
+              }}
+            >
+              {sortedElements.map((element) => {
+                const dsId = element.dataSource?.dataSourceId;
+                const dsStatus = dsId ? dataSourceStatusMap.get(dsId) : undefined;
+                return (
+                  <DOMElementRenderer
+                    key={element.id}
+                    element={element}
+                    isSelected={false}
+                    isEditing={false}
+                    zoom={zoom}
+                    onSelect={noopStrBool}
+                    onDragStart={noopStrMouse}
+                    onResizeStart={noopStrStr}
+                    onRotateStart={noopStrMouse}
+                    onDblClick={noopStr}
+                    activeFilterValues={interactive && activeFilterValues.size > 0 ? activeFilterValues : undefined}
+                    onFilterClick={interactive ? handleFilterClick : undefined}
+                    onFilterControlChange={interactive ? handleFilterControlChange : undefined}
+                    onDrillDown={interactive ? handleDrillDown : undefined}
+                    dataLoading={dsStatus?.loading}
+                    dataError={dsStatus?.error}
+                    onDataRetry={dsId ? () => retryDataSourceFetch(dsId) : undefined}
+                  />
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Page navigation */}
       {showPageNav && pages.length > 1 && (

@@ -7,7 +7,7 @@ const packages = path.resolve(__dirname, '../../packages');
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: path.resolve(__dirname, '../../.vercel_output'),
+    outDir: path.resolve(__dirname, '../../public'),
     emptyOutDir: true,
   },
   resolve: {

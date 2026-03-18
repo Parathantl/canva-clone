@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm --filter @reactcanvas/demo build",
+  "buildCommand": "pnpm --filter @reactcanvas/demo build && cp -r apps/demo/dist public",
   "outputDirectory": "public",
   "installCommand": "npm i -g pnpm@9.15.4 && pnpm install",
   "framework": null

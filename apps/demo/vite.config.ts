@@ -6,6 +6,10 @@ const packages = path.resolve(__dirname, '../../packages');
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    outDir: '../../dist',
+    emptyOutDir: true,
+  },
   resolve: {
     alias: {
       '@reactcanvas/core': path.join(packages, 'core/src/index.ts'),

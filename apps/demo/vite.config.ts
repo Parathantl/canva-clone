@@ -7,7 +7,8 @@ const packages = path.resolve(__dirname, '../../packages');
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: 'dist',
+    outDir: path.resolve(__dirname, '../../.vercel_output'),
+    emptyOutDir: true,
   },
   resolve: {
     alias: {

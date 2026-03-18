@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm build && cp -r apps/demo/dist dist",
+  "buildCommand": "npx turbo build --force && cp -r apps/demo/dist dist",
   "outputDirectory": "dist",
   "installCommand": "npm i -g pnpm@9.15.4 && pnpm install",
   "framework": null

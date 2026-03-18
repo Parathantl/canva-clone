@@ -7,8 +7,7 @@ const packages = path.resolve(__dirname, '../../packages');
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: '../../dist',
-    emptyOutDir: true,
+    outDir: 'dist',
   },
   resolve: {
     alias: {
